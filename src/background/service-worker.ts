@@ -54,7 +54,7 @@ async function startSelection(tabId: number): Promise<void> {
       type: 'OCR_STATUS',
       stage: 'error',
       message:
-        'Can’t start here. Reload the page (Ctrl/Cmd+R), or press Ctrl+Shift+O on the tab you want to capture. Browser pages (chrome://) can’t be captured.',
+        'Can’t start here. Reload the page (Ctrl/Cmd+R), or press Ctrl+Shift+Y on the tab you want to capture. Browser pages (chrome://) can’t be captured.',
     })
   }
 }

@@ -29,7 +29,8 @@ export default defineManifest({
 
   commands: {
     'start-capture': {
-      suggested_key: { default: 'Ctrl+Shift+O', mac: 'Command+Shift+O' },
+      // Ctrl+Shift+O is reserved by Chrome (Bookmark Manager); Y is free.
+      suggested_key: { default: 'Ctrl+Shift+Y', mac: 'Command+Shift+Y' },
       description: 'OCR Buddy: start region selection',
     },
   },
