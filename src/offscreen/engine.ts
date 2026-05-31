@@ -319,6 +319,97 @@ async function cropToBuffer(bitmap: ImageBitmap, box: Region['box']): Promise<Ar
   return (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()
 }
 
+/**
+ * Reconstruct a Markdown table from a table region's OCR word boxes: cluster into
+ * rows by y, find columns from the x coverage profile (gutters = x-bins covered by
+ * few words, robust to the odd wide cell bridging a gap), place each word in its
+ * nearest column. Pure geometry — no extra model. Best-effort; complex numeric
+ * tables may mis-split. Returns null when it isn't grid-like.
+ */
+function reconstructTable(words: OcrWord[]): string | null {
+  const ws = words.filter((w) => w.text.trim().length > 0)
+  if (ws.length < 4) return null
+  const medH = median(ws.map((w) => w.box.height)) || 1
+
+  // Rows by vertical position.
+  const rows: OcrWord[][] = []
+  let curY = -Infinity
+  for (const w of [...ws].sort((a, b) => a.box.y - b.box.y)) {
+    const cy = w.box.y + w.box.height / 2
+    if (!rows.length || Math.abs(cy - curY) > medH * 0.7) {
+      rows.push([])
+      curY = cy
+    }
+    rows[rows.length - 1].push(w)
+  }
+  if (rows.length < 2) return null
+
+  // Columns from the x coverage profile: a gutter is a run of x-bins covered by
+  // <~18% of rows; columns are the populated runs between gutters.
+  const xMin = Math.min(...ws.map((w) => w.box.x))
+  const xMax = Math.max(...ws.map((w) => w.box.x + w.box.width))
+  const bin = Math.max(2, Math.round(medH * 0.3))
+  const nb = Math.ceil((xMax - xMin) / bin) + 1
+  const cov = new Array(nb).fill(0)
+  for (const w of ws) {
+    const a = Math.floor((w.box.x - xMin) / bin)
+    const b = Math.floor((w.box.x + w.box.width - xMin) / bin)
+    for (let i = Math.max(0, a); i <= Math.min(nb - 1, b); i++) cov[i]++
+  }
+  const gut = Math.max(1, rows.length * 0.18)
+  const isGut = cov.map((c) => c <= gut)
+  const cols: [number, number][] = []
+  let start = -1
+  for (let i = 0; i < nb; i++) {
+    if (!isGut[i]) {
+      if (start < 0) start = i
+    } else if (start >= 0) {
+      let j = i
+      while (j < nb && isGut[j]) j++
+      if (j - i >= 2 || j >= nb) {
+        cols.push([xMin + start * bin, xMin + i * bin])
+        start = -1
+        i = j - 1
+      }
+    }
+  }
+  if (start >= 0) cols.push([xMin + start * bin, xMin + nb * bin])
+  if (cols.length < 2) return null // not a table
+
+  const center = (c: [number, number]) => (c[0] + c[1]) / 2
+  const colOf = (w: OcrWord) => {
+    const cx = w.box.x + w.box.width / 2
+    let nearest = 0
+    let best = Infinity
+    cols.forEach((c, i) => {
+      const d = Math.abs(cx - center(c))
+      if (d < best) {
+        best = d
+        nearest = i
+      }
+    })
+    return nearest
+  }
+
+  const ncol = cols.length
+  const grid = rows.map((row) => {
+    const cells = Array.from({ length: ncol }, () => '')
+    for (const w of [...row].sort((a, b) => a.box.x - b.box.x)) {
+      const c = colOf(w)
+      cells[c] = cells[c] ? `${cells[c]} ${w.text}` : w.text
+    }
+    return cells.map((c) => c.trim())
+  })
+
+  const esc = (s: string) => s.replace(/\|/g, '\\|')
+  const md = [
+    `| ${grid[0].map(esc).join(' | ')} |`,
+    `| ${grid[0].map(() => '---').join(' | ')} |`,
+    ...grid.slice(1).map((r) => `| ${r.map(esc).join(' | ')} |`),
+  ]
+  return md.join('\n')
+}
+
 export interface DocOutput {
   docText: string
   backend: 'webgpu' | 'wasm'
@@ -337,7 +428,9 @@ export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOu
     const kind = classifyRegion(r.label)
     if (kind === 'skip') continue
     if (kind === 'table') {
-      parts.push('> **[ Table ]** — structured Markdown coming soon')
+      const tbl = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
+      const md = reconstructTable(tbl.words)
+      parts.push(md ?? '> **[ Table ]** — could not reconstruct structure')
       continue
     }
     if (kind === 'equation') {
