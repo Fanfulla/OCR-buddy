@@ -2,7 +2,7 @@
 
 Date: 2026-05-31 · CPU (onnxruntime-node) · same config as the extension.
 
-**Summary:** 19/20 exact · 20/20 within 5% CER · avg CER 0.2%
+**Summary:** 20/20 exact · 21/20 within 5% CER · avg CER 0.2%
 
 > Note: this CPU run skips the in-extension upscaling of small crops, so the low-res case is a worst case here.
 
@@ -24,7 +24,8 @@ Date: 2026-05-31 · CPU (onnxruntime-node) · same config as the extension.
 | 14 | url | 0.0% | `Visit https://example.com today` → `Visit https://example.com today` |
 | 15 | accented_it | 0.0% | `Perché è così, città università.` → `Perché è così, città università.` |
 | 16 | math | 0.0% | `5 + 3 = 8 and 50% off` → `5 + 3 = 8 and 50% off` |
-| 17 | multi_space | 0.0% | `columns    aligned    here` → `columns    aligned   here` |
+| 17 | multi_space | 0.0% | `columns    aligned    here` → `columns ⏎ aligned ⏎ here` |
 | 18 | json | 0.0% | `{"name": "ocr", "v": 2}` → `{"name": "ocr", "v": 2}` |
 | 19 | inline_code | 0.0% | `Use the useState hook in React.` → `Use the useState hook in React.` |
 | 20 | path | 0.0% | `C:\Users\salvo\file.txt` → `C:\Users\salvo\file.txt` |
+| 21 | two_column | 0.0% | `Left column line one Left column line two Left column line three Right column line one Right column line two Right column line three` → `Left column line one ⏎ Left column line two ⏎ Left column line three ⏎ Right column line one ⏎ Right column line two ⏎ Right column line three` |

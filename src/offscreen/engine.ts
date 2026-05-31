@@ -130,6 +130,59 @@ interface Row {
   top: number // line's top y (for blank-line detection)
 }
 
+/** Group a column's boxes into visual lines (by vertical overlap), each sorted
+ * left-to-right, lines top-to-bottom. */
+function groupLines(boxes: RecognitionResult[], lineH: number): RecognitionResult[][] {
+  const sorted = [...boxes].sort((a, b) => a.box.y - b.box.y)
+  const lines: { cy: number; items: RecognitionResult[] }[] = []
+  for (const b of sorted) {
+    const cy = b.box.y + b.box.height / 2
+    const last = lines[lines.length - 1]
+    if (last && Math.abs(cy - last.cy) < lineH * 0.6) last.items.push(b)
+    else lines.push({ cy, items: [b] })
+  }
+  return lines.map((l) => l.items.sort((a, b) => a.box.x - b.box.x))
+}
+
+/**
+ * Reading order, column-aware. Cluster boxes into columns by gaps in horizontal
+ * coverage wider than a gutter threshold, then read each column top-to-bottom,
+ * columns left-to-right. Fixes multi-column papers that the engine's full-width
+ * line grouping reads as interleaved. A single-column capture yields one column
+ * → unchanged.
+ */
+function groupReadingOrder(boxes: RecognitionResult[]): RecognitionResult[][] {
+  const ws = boxes.filter(hasText)
+  if (!ws.length) return []
+  const lineH = median(ws.map((b) => b.box.height)) || 1
+  const minX = Math.min(...ws.map((b) => b.box.x))
+  const maxX = Math.max(...ws.map((b) => b.box.x + b.box.width))
+  const colGap = Math.max(lineH * 1.4, (maxX - minX) * 0.045)
+
+  // Merge x-intervals into column bands; a gap wider than colGap starts a new band.
+  const intervals = ws
+    .map((b) => [b.box.x, b.box.x + b.box.width] as [number, number])
+    .sort((a, b) => a[0] - b[0])
+  const bands: { x0: number; x1: number }[] = []
+  for (const [s, e] of intervals) {
+    const last = bands[bands.length - 1]
+    if (last && s - last.x1 <= colGap) last.x1 = Math.max(last.x1, e)
+    else bands.push({ x0: s, x1: e })
+  }
+
+  const colOf = (b: RecognitionResult) => {
+    const cx = b.box.x + b.box.width / 2
+    const i = bands.findIndex((band) => cx >= band.x0 && cx <= band.x1)
+    return i < 0 ? 0 : i
+  }
+
+  const out: RecognitionResult[][] = []
+  for (let c = 0; c < bands.length; c++) {
+    out.push(...groupLines(ws.filter((b) => colOf(b) === c), lineH))
+  }
+  return out
+}
+
 /**
  * Build one Row per visual line from box geometry. The recognizer dict has no
  * space token, so spacing is reconstructed: a space wherever there's a gap
@@ -199,16 +252,19 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin.
   for (const line of res.lines) for (const w of line) w.text = deHomoglyph(w.text)
 
-  // Carry the engine's line grouping (more reliable than re-deriving from box y
-  // in the panel) so the prose view breaks lines exactly where text wraps.
+  // Re-group into column-aware reading order (fixes multi-column papers that the
+  // engine's full-width line grouping would otherwise read interleaved).
+  const lines = groupReadingOrder(res.lines.flat())
+
+  // Carry the line index so the prose view breaks exactly where text wraps.
   const words: OcrWord[] = []
-  res.lines.forEach((line, li) => {
-    for (const r of line.filter(hasText).sort((a, b) => a.box.x - b.box.x)) {
+  lines.forEach((line, li) => {
+    for (const r of line) {
       words.push({ text: r.text, confidence: r.confidence, box: r.box, line: li })
     }
   })
 
-  const { rows } = buildRows(res.lines)
+  const { rows } = buildRows(lines)
 
   return {
     text: rows.map((r) => r.text).join('\n'), // prose: gap-spaced, no indent
@@ -216,6 +272,6 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
     words,
     backend,
     empty: rows.length === 0,
-    lines: res.lines,
+    lines,
   }
 }

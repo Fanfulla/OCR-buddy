@@ -22,6 +22,15 @@ foreach ($c in $cases) {
     $g.DrawString([string]$line, $font, $brush, [float]8, [float]$y)
     $y += $lineH
   }
+  # Optional second column (for multi-column reading-order tests).
+  if ($c.rightLines) {
+    $y2 = [int]([float]$c.size * 0.4)
+    $rx = [float]([int]$c.w * 0.55)
+    foreach ($line in $c.rightLines) {
+      $g.DrawString([string]$line, $font, $brush, $rx, [float]$y2)
+      $y2 += $lineH
+    }
+  }
   $brush.Dispose(); $font.Dispose(); $g.Dispose()
   $path = Join-Path $OutDir ($c.name + '.png')
   $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)

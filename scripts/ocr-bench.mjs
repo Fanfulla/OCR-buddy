@@ -40,6 +40,14 @@ const cases = [
   { name: '18_json', lines: ['{"name": "ocr", "v": 2}'], font: 'Consolas', size: 26, fg: BLACK, bg: WHITE, w: 420, h: 56 },
   { name: '19_inline_code', lines: ['Use the useState hook in React.'], font: 'Arial', size: 28, fg: BLACK, bg: WHITE, w: 540, h: 60 },
   { name: '20_path', lines: ['C:\\Users\\salvo\\file.txt'], font: 'Consolas', size: 26, fg: BLACK, bg: WHITE, w: 420, h: 56 },
+  // Two columns: must read LEFT fully, then RIGHT (not interleaved by row).
+  {
+    name: '21_two_column',
+    lines: ['Left column line one', 'Left column line two', 'Left column line three'],
+    rightLines: ['Right column line one', 'Right column line two', 'Right column line three'],
+    expectedOverride: 'Left column line one Left column line two Left column line three Right column line one Right column line two Right column line three',
+    font: 'Arial', size: 22, fg: BLACK, bg: WHITE, w: 760, h: 130,
+  },
 ]
 
 // --- Render the images via PowerShell + System.Drawing ----------------------
@@ -60,6 +68,42 @@ const median = (xs) => {
   const m = s.length >> 1
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
+// Mirror of engine.ts column-aware reading order.
+function groupLines(boxes, lineH) {
+  const sorted = [...boxes].sort((a, b) => a.box.y - b.box.y)
+  const lines = []
+  for (const b of sorted) {
+    const cy = b.box.y + b.box.height / 2
+    const last = lines[lines.length - 1]
+    if (last && Math.abs(cy - last.cy) < lineH * 0.6) last.items.push(b)
+    else lines.push({ cy, items: [b] })
+  }
+  return lines.map((l) => l.items.sort((a, b) => a.box.x - b.box.x))
+}
+function groupReadingOrder(boxes) {
+  const ws = boxes.filter(hasText)
+  if (!ws.length) return []
+  const lineH = median(ws.map((b) => b.box.height)) || 1
+  const minX = Math.min(...ws.map((b) => b.box.x))
+  const maxX = Math.max(...ws.map((b) => b.box.x + b.box.width))
+  const colGap = Math.max(lineH * 1.4, (maxX - minX) * 0.045)
+  const intervals = ws.map((b) => [b.box.x, b.box.x + b.box.width]).sort((a, b) => a[0] - b[0])
+  const bands = []
+  for (const [s, e] of intervals) {
+    const last = bands[bands.length - 1]
+    if (last && s - last.x1 <= colGap) last.x1 = Math.max(last.x1, e)
+    else bands.push({ x0: s, x1: e })
+  }
+  const colOf = (b) => {
+    const cx = b.box.x + b.box.width / 2
+    const i = bands.findIndex((band) => cx >= band.x0 && cx <= band.x1)
+    return i < 0 ? 0 : i
+  }
+  const out = []
+  for (let c = 0; c < bands.length; c++) out.push(...groupLines(ws.filter((b) => colOf(b) === c), lineH))
+  return out
+}
+
 function proseFromLines(lines) {
   const flat = lines.flat().filter(hasText)
   if (!flat.length) return ''
@@ -116,14 +160,14 @@ await service.initialize()
 // --- Run --------------------------------------------------------------------
 const results = []
 for (const c of cases) {
-  const expected = c.lines.join('\n')
+  const expected = c.expectedOverride ?? c.lines.join('\n')
   let got = ''
   let err = null
   try {
     const buf = readFileSync(join(IMG, c.name + '.png'))
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
     const res = await service.recognize(ab, { flatten: false })
-    got = proseFromLines(res.lines)
+    got = proseFromLines(groupReadingOrder(res.lines.flat()))
   } catch (e) {
     err = e instanceof Error ? e.message : String(e)
   }
