@@ -103,7 +103,9 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
     }
   } else if (msg.type === 'NEED_PERMISSION') {
     needOrigin = msg.origin
-    permOrigin.textContent = msg.origin || 'this tab'
+    // Be honest about scope: with a known origin we grant just that site; without
+    // one (page not ready) we have to request all sites.
+    permOrigin.textContent = msg.origin || 'all sites'
     permWhy.hidden = true
     setState('permission')
   } else if (msg.type === 'OCR_RESULT') {
