@@ -68,8 +68,19 @@ Notes:
   (alongside `dist/ort/`). Harmless at runtime (`wasmPaths` points at `dist/ort/`);
   trimming is a later optimization.
 
-Still stubbed/deferred: super-resolution for low-res video frames, indentation
-reconstruction for code, and the end-to-end capture→panel UX hasn't been click-tested.
+`npm run verify:ux` drives the **full capture→panel flow** in Chromium: serves a
+local page, fires the overlay, drag-selects with a real mouse, and reads the result
+from the side panel. Confirmed end-to-end (`"HELLO OCR 7"` round-tripped, WebGPU).
+Caveat: this test loads a copy of `dist/` with `host_permissions` added so
+`captureVisibleTab` is authorized without a toolbar click (Playwright can't click the
+browser action) — production keeps `activeTab`, granted by the real click.
+
+Implemented since: **smart upscaling** of small crops (low-res video lever) and a
+**code view** that reconstructs indentation from box geometry (toggle in the panel,
+default off). Both checked by `npm run verify`.
+
+Deferred: an optional ML super-resolution model; richer intra-line spacing; moving
+inference to a dedicated worker.
 
 ## Develop
 
