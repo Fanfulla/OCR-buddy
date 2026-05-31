@@ -8,7 +8,7 @@
 
 import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
-import type { RecognitionResult } from 'ppu-paddle-ocr/web'
+import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
 import type { OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
@@ -58,9 +58,15 @@ async function getService(): Promise<PaddleOcrService> {
   backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
   service = new PaddleOcrService({
     model: { detection, recognition, charactersDictionary },
-    // Tighter horizontal padding so adjacent words stay in SEPARATE detection
-    // boxes — the recognizer dict has no space token, so inter-word spacing must
-    // come from box geometry; merged boxes lose it ("you should" → "youshould").
+    // per-box: recognize each detected box on its OWN crop. The default per-line
+    // strategy merges a line's box crops side-by-side into one image, so adjacent
+    // words lose the gap pixels and run together ("stop doing code" → "stopdoing-
+    // code") and surplus boxes get blanked. per-box keeps each crop's real gaps,
+    // so the recognizer emits spaces; we add inter-box spacing from geometry.
+    // (charactersDictionary is loaded from model.charactersDictionary at runtime;
+    // the type marks it required, so cast.)
+    recognition: { strategy: 'per-box' } as RecognitionOptions,
+    // Tighter horizontal padding so per-box crops don't overlap into duplicates.
     detection: { maxSideLength: MAX_SIDE, paddingHorizontal: 0.15 },
     // canvas-native avoids the OpenCV.js dependency — lighter and MV3-friendly.
     processing: { engine: 'canvas-native' },
