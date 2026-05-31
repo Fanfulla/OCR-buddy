@@ -64,6 +64,8 @@ export interface OcrWord {
   confidence: number
   /** Bounding box in cropped-image px, for the overlay-on-crop view. */
   box: Rect
+  /** Visual line index (from the engine's line grouping) for reliable breaks. */
+  line: number
 }
 
 /** Final result. */

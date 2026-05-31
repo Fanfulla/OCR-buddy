@@ -165,10 +165,14 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   const canvas = await prepareImage(imageBuffer)
   const res = await svc.recognize(canvas, { flatten: false })
 
-  const words: OcrWord[] = res.lines
-    .flat()
-    .filter(hasText)
-    .map((r) => ({ text: r.text, confidence: r.confidence, box: r.box }))
+  // Carry the engine's line grouping (more reliable than re-deriving from box y
+  // in the panel) so the prose view breaks lines exactly where text wraps.
+  const words: OcrWord[] = []
+  res.lines.forEach((line, li) => {
+    for (const r of line.filter(hasText).sort((a, b) => a.box.x - b.box.x)) {
+      words.push({ text: r.text, confidence: r.confidence, box: r.box, line: li })
+    }
+  })
 
   const { rows } = buildRows(res.lines)
 
