@@ -2,6 +2,8 @@
 // error). Listens for OCR status/result broadcasts; renders the captured crop
 // beside the extracted text, flagging low-confidence words.
 
+import hljs from 'highlight.js/lib/common'
+import 'highlight.js/styles/vs2015.css'
 import { LOW_CONFIDENCE, type Message, type OcrResult, type StartSelection } from '../shared/messages'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -73,15 +75,21 @@ function renderResult(r: OcrResult) {
   setState('result')
 }
 
-/** Code mode → raw codeText (whitespace preserved). Prose → per-word confidence. */
+/** Code mode → syntax-highlighted codeText (read-only). Prose → editable, with
+ *  per-word confidence underlines. */
 function renderText() {
   if (!lastResult) return
   textEl.replaceChildren()
 
   if (codeMode) {
-    textEl.textContent = lastResult.codeText
+    // hljs auto-detects the language and escapes the input, so innerHTML is safe.
+    textEl.classList.add('hljs')
+    textEl.contentEditable = 'false'
+    textEl.innerHTML = hljs.highlightAuto(lastResult.codeText).value
     return
   }
+  textEl.classList.remove('hljs')
+  textEl.contentEditable = 'true'
   // Prose: per-word spans (confidence underlines), with line breaks taken from the
   // engine's line grouping (w.line) — exactly where the source text wraps.
   let prevLine = -1

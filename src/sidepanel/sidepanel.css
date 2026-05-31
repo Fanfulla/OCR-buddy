@@ -221,6 +221,10 @@ figcaption {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
+/* Code mode: highlight.js (vs2015) theme — keep our padding/border, dark canvas. */
+.text.hljs {
+  background: #1e1e1e;
+}
 
 /* Low-confidence words flagged, never silently trusted. */
 .uncertain {
