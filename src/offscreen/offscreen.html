@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OCR Buddy — offscreen</title>
+  </head>
+  <body>
+    <!-- Invisible host page. Exists only to own the OCR worker and provide a
+         cross-origin-isolated, WebGPU-capable context (see research §2.3). -->
+    <script type="module" src="./offscreen.ts"></script>
+  </body>
+</html>

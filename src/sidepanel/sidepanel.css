@@ -1,0 +1,113 @@
+:root {
+  --bg: #1e1e22;
+  --panel: #26262b;
+  --fg: #e7e7ea;
+  --muted: #9a9aa2;
+  --accent: #4f9cff;
+  --warn: #e0a23a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 14px;
+  font: 14px/1.45 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #04203f;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+figure {
+  margin: 0 0 12px;
+}
+
+figcaption {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+#crop {
+  max-width: 100%;
+  border: 1px solid #3a3a42;
+  border-radius: 6px;
+  display: block;
+}
+
+.text-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0;
+}
+
+h2 {
+  font-size: 13px;
+  margin: 0;
+  color: var(--muted);
+}
+
+button {
+  background: var(--accent);
+  color: #04203f;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.text {
+  background: var(--panel);
+  border: 1px solid #3a3a42;
+  border-radius: 6px;
+  padding: 10px;
+  min-height: 80px;
+  white-space: pre-wrap;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 13px;
+}
+
+/* Low-confidence words are flagged, never silently trusted. */
+.uncertain {
+  text-decoration: underline wavy var(--warn);
+  text-underline-offset: 3px;
+}
+
+.empty-note {
+  color: var(--warn);
+  font-size: 13px;
+}

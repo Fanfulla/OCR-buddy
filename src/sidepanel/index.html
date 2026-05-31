@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OCR Buddy</title>
+    <link rel="stylesheet" href="./sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>OCR Buddy</h1>
+      <span id="backend" class="badge" hidden></span>
+    </header>
+
+    <p id="status" class="status">Click the toolbar icon, then drag to select a region.</p>
+
+    <section id="result" hidden>
+      <figure>
+        <figcaption>Captured region</figcaption>
+        <img id="crop" alt="captured region" />
+      </figure>
+
+      <div class="text-head">
+        <h2>Extracted text</h2>
+        <button id="copy" type="button">Copy</button>
+      </div>
+      <!-- Source crop shown directly above the text: cheapest, strongest
+           anti-hallucination guardrail (eyeball source vs output). -->
+      <div id="text" class="text" contenteditable="true" spellcheck="false"></div>
+      <p id="empty-note" class="empty-note" hidden>
+        No confident text found in this region. Nothing was invented.
+      </p>
+    </section>
+
+    <script type="module" src="./sidepanel.ts"></script>
+  </body>
+</html>
