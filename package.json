@@ -8,12 +8,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.31",
     "@types/chrome": "^0.0.323",
     "@webgpu/types": "^0.1.52",
+    "playwright": "^1.60.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
   },

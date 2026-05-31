@@ -39,6 +39,7 @@ export default defineConfig({
       // OCR engine).
       input: {
         offscreen: 'src/offscreen/offscreen.html',
+        testbed: 'src/testbed/testbed.html', // dev/verification page
       },
     },
   },

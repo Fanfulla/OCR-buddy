@@ -47,21 +47,29 @@ side panel (crop shown beside editable text; low-confidence words flagged)
 
 ## Status
 
-🟡 **Engine wired — runtime unverified.** The full pipeline is implemented: the
-offscreen document hosts [`ppu-paddle-ocr`](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr)
+🟢 **Engine verified in a real MV3 extension.** The offscreen document hosts
+[`ppu-paddle-ocr`](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr)
 (PP-OCRv5, Apache-2.0) on ONNX Runtime Web, with the three model files bundled in
 `public/models/` (see `public/models/SOURCE.md`) and the ORT wasm self-hosted under
-`dist/ort/`. `npm run build` + `npm run typecheck` are green.
+`dist/ort/`. Build + typecheck green.
 
-**Not yet confirmed in a browser** — load `dist/` unpacked (Chrome 124+) and check the
-offscreen console (`chrome://extensions` → OCR Buddy → *Inspect views: offscreen.html*)
-for `crossOriginIsolated === true`, no wasm 404s under `/ort/`, and a non-empty
-recognition result. Note: a tab open *before* the extension loads must be reloaded
-once for the selection overlay to attach.
+`npm run verify` loads the built extension in Chromium (Playwright) and runs the real
+engine on a bundled test image. Confirmed: `crossOriginIsolated === true`, **WebGPU**
+backend active, and faithful output — `"OCR Buddy 2026 const x = 42;"` extracted
+exactly (symbols and digits intact, nothing invented). The `src/testbed/` page is the
+harness it drives.
 
-Known size caveat: Vite also emits a hashed copy of the ~26 MB WebGPU wasm in
-`assets/` (alongside the self-hosted `dist/ort/` copy). Harmless at runtime
-(`wasmPaths` points at `dist/ort/`); trimming is a later optimization.
+Notes:
+- A tab open *before* the extension loads must be reloaded once for the selection
+  overlay to attach (the service worker shows a friendly message otherwise).
+- `npm run verify` must run headed (Playwright only loads extensions headed) and uses
+  bundled Chromium because an org-managed system Chrome may block `--load-extension`.
+- Size caveat: Vite also emits a hashed copy of the ~26 MB WebGPU wasm in `assets/`
+  (alongside `dist/ort/`). Harmless at runtime (`wasmPaths` points at `dist/ort/`);
+  trimming is a later optimization.
+
+Still stubbed/deferred: super-resolution for low-res video frames, indentation
+reconstruction for code, and the end-to-end capture→panel UX hasn't been click-tested.
 
 ## Develop
 
