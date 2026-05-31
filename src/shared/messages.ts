@@ -12,7 +12,12 @@ export interface Rect {
   height: number
 }
 
-/** SW → content overlay: user clicked the action; show the selection overlay. */
+/** Panel → SW: user pressed "Select region"; begin a capture on the active tab. */
+export interface StartSelection {
+  type: 'START_SELECTION'
+}
+
+/** SW → content overlay: show the selection overlay on the page. */
 export interface ShowOverlay {
   type: 'SHOW_OVERLAY'
 }
@@ -34,6 +39,7 @@ export interface RunOcr {
 }
 
 export type OcrStage =
+  | 'selecting'
   | 'capturing'
   | 'preprocessing'
   | 'loading-model'
@@ -76,7 +82,13 @@ export interface OcrResult {
   empty: boolean
 }
 
-export type Message = ShowOverlay | CaptureRequest | RunOcr | OcrStatus | OcrResult
+export type Message =
+  | StartSelection
+  | ShowOverlay
+  | CaptureRequest
+  | RunOcr
+  | OcrStatus
+  | OcrResult
 
 /** Confidence below this is rendered as "uncertain" in the UI. */
 export const LOW_CONFIDENCE = 0.6

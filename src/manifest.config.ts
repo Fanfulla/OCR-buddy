@@ -24,7 +24,14 @@ export default defineManifest({
   minimum_chrome_version: '124',
 
   action: {
-    default_title: 'OCR Buddy — click, then drag to select a region',
+    default_title: 'OCR Buddy — open panel, then Select region',
+  },
+
+  commands: {
+    'start-capture': {
+      suggested_key: { default: 'Ctrl+Shift+O', mac: 'Command+Shift+O' },
+      description: 'OCR Buddy: start region selection',
+    },
   },
 
   background: {

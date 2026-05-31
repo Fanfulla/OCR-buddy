@@ -8,13 +8,29 @@
   </head>
   <body>
     <header>
-      <h1>OCR Buddy</h1>
+      <div class="brand"><span class="logo">OB</span> OCR Buddy</div>
       <span id="backend" class="badge" hidden></span>
     </header>
 
-    <p id="status" class="status">Click the toolbar icon, then drag to select a region.</p>
+    <!-- IDLE -->
+    <section id="state-idle" class="state">
+      <button id="select-btn" class="btn-primary big">
+        <span class="ico">⤢</span> Select region
+      </button>
+      <p class="hint">
+        Then drag over the text on the page.<br />
+        Shortcut: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>
+      </p>
+    </section>
 
-    <section id="result" hidden>
+    <!-- BUSY -->
+    <section id="state-busy" class="state" hidden>
+      <div id="spinner" class="spinner"></div>
+      <p id="busy-label" class="hint"></p>
+    </section>
+
+    <!-- RESULT -->
+    <section id="state-result" class="state" hidden>
       <figure>
         <figcaption>Captured region</figcaption>
         <img id="crop" alt="captured region" />
@@ -22,17 +38,28 @@
 
       <div class="text-head">
         <h2>Extracted text</h2>
-        <label class="code-toggle">
-          <input id="code-mode" type="checkbox" /> Code
-        </label>
-        <button id="copy" type="button">Copy</button>
+        <div class="seg" role="tablist" aria-label="View mode">
+          <button id="seg-prose" class="seg-btn is-active" type="button">Prose</button>
+          <button id="seg-code" class="seg-btn" type="button">Code</button>
+        </div>
       </div>
-      <!-- Source crop shown directly above the text: cheapest, strongest
-           anti-hallucination guardrail (eyeball source vs output). -->
+
+      <!-- Source crop shown above the text: the cheapest anti-hallucination check. -->
       <div id="text" class="text" contenteditable="true" spellcheck="false"></div>
       <p id="empty-note" class="empty-note" hidden>
         No confident text found in this region. Nothing was invented.
       </p>
+
+      <div class="actions">
+        <button id="copy" class="btn-secondary" type="button">Copy</button>
+        <button id="new-capture" class="btn-primary" type="button">New capture</button>
+      </div>
+    </section>
+
+    <!-- ERROR -->
+    <section id="state-error" class="state" hidden>
+      <p id="error-msg" class="error"></p>
+      <button id="retry-btn" class="btn-primary" type="button">Try again</button>
     </section>
 
     <script type="module" src="./sidepanel.ts"></script>

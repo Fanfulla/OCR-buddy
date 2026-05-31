@@ -1,43 +1,67 @@
 // Service worker = COORDINATOR ONLY (no DOM, no model, no inference).
 // Responsibilities:
-//   1. On action click: open side panel + inject the selection overlay (activeTab).
-//   2. Receive the selected rect → captureVisibleTab → crop on OffscreenCanvas.
-//   3. Ensure the offscreen document exists → forward the crop for OCR.
-//   4. Relay status/result messages to the side panel.
+//   1. Toolbar icon → open the side panel (no auto-selection).
+//   2. "Select region" button / Ctrl+Shift+O → show the overlay on the active tab.
+//   3. Receive the selected rect → captureVisibleTab → crop on OffscreenCanvas.
+//   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import type { CaptureRequest, Message, RunOcr, ShowOverlay } from '../shared/messages'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 const V1_LANGS = ['en', 'it', 'fr', 'de', 'es'] // Latin + IT/EU (research §v1)
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id) return
+// Toolbar icon: open the panel only. The click grants activeTab for this tab, so
+// the panel's "Select region" button can capture it without page dimming on open.
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id })
+})
+
+// Keyboard shortcut: open the panel AND start selection in one step (the command
+// also grants activeTab, so it works on any tab, not just one already opened).
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command !== 'start-capture' || tab?.id === undefined) return
   await chrome.sidePanel.open({ tabId: tab.id })
-  // Wake the passive overlay content script on this tab. It's only present on
-  // pages loaded after the extension was installed/reloaded, so a tab that was
-  // already open won't have the listener yet → tell the user to reload.
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
-  } catch {
-    chrome.runtime.sendMessage({
-      type: 'OCR_STATUS',
-      stage: 'error',
-      message: 'This page was open before OCR Buddy loaded. Reload it (Ctrl/Cmd+R), then click again.',
-    })
-  }
+  await startSelection(tab.id)
 })
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
-  if (msg.type === 'CAPTURE_REQUEST') {
+  if (msg.type === 'START_SELECTION') {
+    void startActiveTabSelection()
+  } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
   }
-  // OCR_STATUS / OCR_RESULT come from the offscreen doc and are addressed to the
-  // side panel; they're broadcast via runtime messaging, so no relay needed here.
+  // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
+  // via broadcast — no relay needed here.
   return false
 })
 
+/** Resolve the active tab, then start selection on it. */
+async function startActiveTabSelection(): Promise<void> {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+  if (tab?.id === undefined) return
+  await startSelection(tab.id)
+}
+
+/** Show the selection overlay on a tab; guide the user if it isn't reachable. */
+async function startSelection(tabId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'selecting' })
+  } catch {
+    // No overlay content script here (page predates the extension load, or it's a
+    // restricted page like chrome://). Tell the user how to recover.
+    chrome.runtime.sendMessage({
+      type: 'OCR_STATUS',
+      stage: 'error',
+      message:
+        'Can’t start here. Reload the page (Ctrl/Cmd+R), or press Ctrl+Shift+O on the tab you want to capture. Browser pages (chrome://) can’t be captured.',
+    })
+  }
+}
+
 async function handleCapture(req: CaptureRequest): Promise<void> {
   try {
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     // captureVisibleTab returns CLEAN composited pixels — taint-free even over
     // cross-origin <video> (the YouTube-code case). See research §2.4.
     const fullDataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
