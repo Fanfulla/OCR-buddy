@@ -66,8 +66,22 @@ figcaption {
 .text-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   margin: 6px 0;
+}
+
+.text-head h2 {
+  margin-right: auto;
+}
+
+.code-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
 }
 
 h2 {

@@ -13,6 +13,9 @@ const textEl = $('text')
 const emptyNote = $('empty-note')
 const backendEl = $('backend')
 const copyBtn = $<HTMLButtonElement>('copy')
+const codeModeEl = $<HTMLInputElement>('code-mode')
+
+let lastResult: OcrResult | null = null
 
 const STAGE_LABEL: Record<string, string> = {
   capturing: 'Capturing region…',
@@ -36,6 +39,7 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
 })
 
 function renderResult(r: OcrResult) {
+  lastResult = r
   statusEl.hidden = true
   resultEl.hidden = false
   cropEl.src = r.imageDataUrl
@@ -44,9 +48,19 @@ function renderResult(r: OcrResult) {
   backendEl.hidden = false
 
   emptyNote.hidden = !r.empty
+  renderText()
+}
 
+/** Code mode → raw codeText (whitespace preserved). Prose → per-word confidence. */
+function renderText() {
+  if (!lastResult) return
   textEl.replaceChildren()
-  for (const w of r.words) {
+
+  if (codeModeEl.checked) {
+    textEl.textContent = lastResult.codeText
+    return
+  }
+  for (const w of lastResult.words) {
     const span = document.createElement('span')
     span.textContent = w.text + ' '
     if (w.confidence < LOW_CONFIDENCE) span.className = 'uncertain'
@@ -54,6 +68,8 @@ function renderResult(r: OcrResult) {
     textEl.appendChild(span)
   }
 }
+
+codeModeEl.addEventListener('change', renderText)
 
 copyBtn.addEventListener('click', async () => {
   await navigator.clipboard.writeText(textEl.textContent ?? '')

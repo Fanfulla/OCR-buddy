@@ -63,8 +63,10 @@ export interface OcrWord {
 /** Final result. */
 export interface OcrResult {
   type: 'OCR_RESULT'
-  /** Reconstructed full text (reading order). */
+  /** Prose text: lines joined naturally (reading order). */
   text: string
+  /** Code view: line breaks + indentation reconstructed from box geometry. */
+  codeText: string
   words: OcrWord[]
   /** Which backend actually ran. */
   backend: 'webgpu' | 'wasm'

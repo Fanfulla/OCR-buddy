@@ -27,6 +27,7 @@ async function run(req: RunOcr): Promise<void> {
     post({
       type: 'OCR_RESULT',
       text: out.text,
+      codeText: out.codeText,
       words: out.words,
       backend: out.backend,
       imageDataUrl: req.imageDataUrl,
