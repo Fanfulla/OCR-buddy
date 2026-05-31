@@ -18,6 +18,7 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
-    "onnxruntime-web": "^1.20.1"
+    "onnxruntime-web": "^1.20.1",
+    "ppu-paddle-ocr": "^5.8.3"
   }
 }

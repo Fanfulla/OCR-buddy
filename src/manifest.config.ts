@@ -65,7 +65,8 @@ export default defineManifest({
 
   web_accessible_resources: [
     {
-      resources: ['src/offscreen/offscreen.html', 'models/*', '*.wasm'],
+      // offscreen page, self-hosted ORT wasm/loaders, and bundled OCR models.
+      resources: ['src/offscreen/offscreen.html', 'ort/*', 'models/*'],
       matches: ['<all_urls>'],
     },
   ],

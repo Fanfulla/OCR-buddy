@@ -28,13 +28,13 @@ service worker (coordinator)  ── captureVisibleTab → crop on OffscreenCanv
       │ cropped PNG
       ▼
 offscreen document (cross-origin isolated, WebGPU-capable)
-      └─ dedicated worker: PP-OCRv5 on ONNX Runtime Web  ── text + confidence
+      └─ ppu-paddle-ocr · PP-OCRv5 on ONNX Runtime Web  ── text + confidence
       ▼
 side panel (crop shown beside editable text; low-confidence words flagged)
 ```
 
 - **Service worker** = coordinator only (no DOM, no model, no inference).
-- **Offscreen document** = the long-lived host that owns the warm model + worker.
+- **Offscreen document** = the long-lived host that runs the warm OCR engine.
 - **Capture** uses `chrome.tabs.captureVisibleTab` (taint-free even over cross-origin
   video) — *not* `<video>`-frame grabbing, which the cross-origin canvas taint blocks.
 
@@ -47,9 +47,21 @@ side panel (crop shown beside editable text; low-confidence words flagged)
 
 ## Status
 
-🚧 **Scaffold.** Extension shell, capture, messaging, offscreen host, and UI are
-wired end-to-end. The PP-OCRv5 inference pipeline in `src/worker/ocr.worker.ts` is
-stubbed — each step is a marked `TODO`.
+🟡 **Engine wired — runtime unverified.** The full pipeline is implemented: the
+offscreen document hosts [`ppu-paddle-ocr`](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr)
+(PP-OCRv5, Apache-2.0) on ONNX Runtime Web, with the three model files bundled in
+`public/models/` (see `public/models/SOURCE.md`) and the ORT wasm self-hosted under
+`dist/ort/`. `npm run build` + `npm run typecheck` are green.
+
+**Not yet confirmed in a browser** — load `dist/` unpacked (Chrome 124+) and check the
+offscreen console (`chrome://extensions` → OCR Buddy → *Inspect views: offscreen.html*)
+for `crossOriginIsolated === true`, no wasm 404s under `/ort/`, and a non-empty
+recognition result. Note: a tab open *before* the extension loads must be reloaded
+once for the selection overlay to attach.
+
+Known size caveat: Vite also emits a hashed copy of the ~26 MB WebGPU wasm in
+`assets/` (alongside the self-hosted `dist/ort/` copy). Harmless at runtime
+(`wasmPaths` points at `dist/ort/`); trimming is a later optimization.
 
 ## Develop
 

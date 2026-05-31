@@ -13,8 +13,18 @@ const V1_LANGS = ['en', 'it', 'fr', 'de', 'es'] // Latin + IT/EU (research §v1)
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id) return
   await chrome.sidePanel.open({ tabId: tab.id })
-  // Wake the passive overlay content script on this tab.
-  await chrome.tabs.sendMessage(tab.id, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
+  // Wake the passive overlay content script on this tab. It's only present on
+  // pages loaded after the extension was installed/reloaded, so a tab that was
+  // already open won't have the listener yet → tell the user to reload.
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
+  } catch {
+    chrome.runtime.sendMessage({
+      type: 'OCR_STATUS',
+      stage: 'error',
+      message: 'This page was open before OCR Buddy loaded. Reload it (Ctrl/Cmd+R), then click again.',
+    })
+  }
 })
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
