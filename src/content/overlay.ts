@@ -37,7 +37,7 @@ function showOverlay() {
   root.appendChild(box)
 
   const hint = document.createElement('div')
-  hint.textContent = 'Drag to select a region · Esc to cancel'
+  hint.textContent = 'Drag to select · Esc or click to cancel'
   hint.style.cssText = [
     'position:fixed',
     'top:12px',
@@ -53,6 +53,8 @@ function showOverlay() {
   root.appendChild(hint)
 
   document.documentElement.appendChild(root)
+  root.tabIndex = -1
+  root.focus() // so Esc reaches us on pages that don't steal keyboard focus
 
   let startX = 0
   let startY = 0
@@ -62,6 +64,7 @@ function showOverlay() {
     root.remove()
     w[OVERLAY_FLAG] = false
     window.removeEventListener('keydown', onKey, true)
+    document.removeEventListener('keydown', onKey, true)
   }
 
   function onKey(e: KeyboardEvent) {
@@ -71,8 +74,10 @@ function showOverlay() {
       teardown()
     }
   }
-  // Capture phase: get Esc before the page (PDF viewer / YouTube intercept it).
+  // Capture phase on both targets to grab Esc before the page. (On Chrome's PDF
+  // viewer the embed keeps keyboard focus, so a click cancels there instead.)
   window.addEventListener('keydown', onKey, true)
+  document.addEventListener('keydown', onKey, true)
 
   root.addEventListener('mousedown', (e) => {
     dragging = true

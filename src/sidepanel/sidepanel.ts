@@ -133,12 +133,30 @@ permDismiss.addEventListener('click', () => {
   permWhy.hidden = false
 })
 
+function setBackendBadge(backend: 'webgpu' | 'wasm') {
+  backendEl.textContent = backend === 'wasm' ? 'WASM' : 'WebGPU'
+  backendEl.dataset.backend = backend
+  backendEl.hidden = false
+}
+
+// Show the badge from the start, reflecting the device's capability; the result
+// later confirms which backend actually ran.
+async function initBadge() {
+  let backend: 'webgpu' | 'wasm' = 'wasm'
+  try {
+    const gpu = (navigator as unknown as { gpu?: GPU }).gpu
+    if (gpu && (await gpu.requestAdapter())) backend = 'webgpu'
+  } catch {
+    /* no WebGPU → WASM */
+  }
+  setBackendBadge(backend)
+}
+void initBadge()
+
 function renderResult(r: OcrResult) {
   lastResult = r
   cropEl.src = r.imageDataUrl
-  backendEl.textContent = r.backend === 'wasm' ? 'WASM' : 'WebGPU'
-  backendEl.dataset.backend = r.backend
-  backendEl.hidden = false
+  setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
   renderText()
   setState('result')
