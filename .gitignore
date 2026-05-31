@@ -6,3 +6,5 @@ dist/
 .pw-profile/
 .pw-*/
 dist-test/
+scripts/ocr-bench/img/
+scripts/ocr-bench/cases.json
