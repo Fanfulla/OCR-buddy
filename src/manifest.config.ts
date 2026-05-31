@@ -57,12 +57,17 @@ export default defineManifest({
   ],
 
   permissions: [
-    'activeTab', // captureVisibleTab on the current tab
+    'activeTab', // captureVisibleTab on the tab where invoked
     'offscreen', // host the warm model + worker off the service worker
     'sidePanel', // durable result UI
     'storage', // small settings
     'unlimitedStorage', // cached model files (Cache Storage)
   ],
+
+  // Not requested at install. Asked at runtime, per-site, when the user tries to
+  // capture a tab they didn't invoke on — so capture works across tabs without a
+  // blanket grant. The screenshot (the sensitive action) is gated per origin.
+  optional_host_permissions: ['<all_urls>'],
 
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",

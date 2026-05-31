@@ -27,6 +27,19 @@ export interface CaptureRequest {
   type: 'CAPTURE_REQUEST'
   rect: Rect
   devicePixelRatio: number
+  /** Page origin, so the SW can request per-site capture permission if needed. */
+  origin: string
+}
+
+/** SW → panel: capturing this tab needs the user to grant per-site permission. */
+export interface NeedPermission {
+  type: 'NEED_PERMISSION'
+  origin: string
+}
+
+/** Panel → SW: the user granted the per-site permission; retry the capture. */
+export interface PermissionGranted {
+  type: 'PERMISSION_GRANTED'
 }
 
 /** SW → offscreen/worker: run OCR on this cropped image. */
@@ -88,6 +101,8 @@ export type Message =
   | StartSelection
   | ShowOverlay
   | CaptureRequest
+  | NeedPermission
+  | PermissionGranted
   | RunOcr
   | OcrStatus
   | OcrResult

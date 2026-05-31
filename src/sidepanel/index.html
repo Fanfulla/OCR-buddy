@@ -171,6 +171,33 @@
       </button>
     </section>
 
+    <!-- PERMISSION (per-site capture consent) -->
+    <section id="state-permission" class="state" hidden>
+      <div class="error-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="9" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+      </div>
+      <div class="idle-copy">
+        <h1>Enable capture for this site</h1>
+        <p class="hint">
+          OCR Buddy needs your permission to screenshot
+          <strong id="perm-origin" class="perm-origin"></strong>. It runs entirely
+          on your device — nothing leaves your computer.
+        </p>
+      </div>
+      <div class="actions">
+        <button id="perm-dismiss" class="btn btn-secondary" type="button">Not now</button>
+        <button id="perm-enable" class="btn btn-primary" type="button">Enable for this site</button>
+      </div>
+      <p id="perm-why" class="error-sub" hidden>
+        No problem — nothing was captured. OCR Buddy can only screenshot a tab once
+        you allow it. Enable it anytime, or just use it on the tab where you opened
+        the panel (or press the shortcut there).
+      </p>
+    </section>
+
     <script type="module" src="./sidepanel.ts"></script>
   </body>
 </html>

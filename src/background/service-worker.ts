@@ -24,11 +24,16 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   await startSelection(tab.id)
 })
 
+// Last capture, kept so we can retry it after the user grants per-site permission.
+let pendingCapture: CaptureRequest | null = null
+
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   if (msg.type === 'START_SELECTION') {
     void startActiveTabSelection()
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
+  } else if (msg.type === 'PERMISSION_GRANTED') {
+    if (pendingCapture) void handleCapture(pendingCapture)
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
   // via broadcast — no relay needed here.
@@ -60,6 +65,7 @@ async function startSelection(tabId: number): Promise<void> {
 }
 
 async function handleCapture(req: CaptureRequest): Promise<void> {
+  pendingCapture = req
   try {
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     // captureVisibleTab returns CLEAN composited pixels — taint-free even over
@@ -75,11 +81,14 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
     }
     await chrome.runtime.sendMessage(runMsg)
   } catch (err) {
-    chrome.runtime.sendMessage({
-      type: 'OCR_STATUS',
-      stage: 'error',
-      message: err instanceof Error ? err.message : String(err),
-    })
+    const message = err instanceof Error ? err.message : String(err)
+    // Missing host/activeTab permission for this tab → ask the user to grant it
+    // for this site (runtime, per-origin), then retry.
+    if (/activeTab|all_urls|permission/i.test(message)) {
+      chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: req.origin })
+    } else {
+      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
+    }
   }
 }
 

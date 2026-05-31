@@ -127,11 +127,17 @@ header {
 }
 
 #state-idle,
-#state-error {
+#state-error,
+#state-permission {
   align-items: center;
   text-align: center;
   gap: 16px;
   padding: 30px 8px 24px;
+}
+
+.perm-origin {
+  color: var(--fg);
+  word-break: break-all;
 }
 
 .hint {

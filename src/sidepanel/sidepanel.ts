@@ -6,7 +6,14 @@
 
 import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/vs2015.css'
-import { LOW_CONFIDENCE, type Message, type OcrResult, type OcrStage, type StartSelection } from '../shared/messages'
+import {
+  LOW_CONFIDENCE,
+  type Message,
+  type OcrResult,
+  type OcrStage,
+  type PermissionGranted,
+  type StartSelection,
+} from '../shared/messages'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 
@@ -27,11 +34,17 @@ const segProse = $<HTMLButtonElement>('seg-prose')
 const segCode = $<HTMLButtonElement>('seg-code')
 const copyBtn = $<HTMLButtonElement>('copy')
 
-type State = 'idle' | 'busy' | 'result' | 'error'
-const STATES: State[] = ['idle', 'busy', 'result', 'error']
+type State = 'idle' | 'busy' | 'result' | 'error' | 'permission'
+const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission']
 const setState = (s: State) => {
   for (const name of STATES) $(`state-${name}`).hidden = name !== s
 }
+
+const permOrigin = $('perm-origin')
+const permWhy = $('perm-why')
+const permEnable = $<HTMLButtonElement>('perm-enable')
+const permDismiss = $<HTMLButtonElement>('perm-dismiss')
+let needOrigin = ''
 
 let lastResult: OcrResult | null = null
 let codeMode = false
@@ -88,10 +101,35 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
     } else if (msg.stage !== 'done') {
       showStage(msg.stage, msg.progress)
     }
+  } else if (msg.type === 'NEED_PERMISSION') {
+    needOrigin = msg.origin
+    permOrigin.textContent = msg.origin
+    permWhy.hidden = true
+    setState('permission')
   } else if (msg.type === 'OCR_RESULT') {
     renderResult(msg)
   }
   return false
+})
+
+permEnable.addEventListener('click', async () => {
+  // Must run in a user gesture (this click) — the side panel is an extension page.
+  const granted = await chrome.permissions.request({ origins: [`${needOrigin}/*`] })
+  if (granted) {
+    chrome.runtime.sendMessage({ type: 'PERMISSION_GRANTED' } satisfies PermissionGranted)
+    busyLabel.textContent = 'Capturing region…'
+    progressFill.style.width = '22%'
+    spinnerEl.hidden = false
+    selectingNote.hidden = true
+    busySkeleton.hidden = false
+    setState('busy')
+  } else {
+    permWhy.hidden = false // calm explanation, no alarmism
+  }
+})
+
+permDismiss.addEventListener('click', () => {
+  permWhy.hidden = false
 })
 
 function renderResult(r: OcrResult) {

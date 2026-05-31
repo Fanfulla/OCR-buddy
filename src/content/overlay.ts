@@ -107,6 +107,7 @@ function showOverlay() {
       type: 'CAPTURE_REQUEST',
       rect: { x, y, width, height },
       devicePixelRatio: window.devicePixelRatio || 1,
+      origin: window.location.origin,
     }
     // Small delay lets the overlay removal paint before captureVisibleTab.
     setTimeout(() => chrome.runtime.sendMessage(capture), 50)
