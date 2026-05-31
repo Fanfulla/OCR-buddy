@@ -58,7 +58,10 @@ async function getService(): Promise<PaddleOcrService> {
   backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
   service = new PaddleOcrService({
     model: { detection, recognition, charactersDictionary },
-    detection: { maxSideLength: MAX_SIDE },
+    // Tighter horizontal padding so adjacent words stay in SEPARATE detection
+    // boxes — the recognizer dict has no space token, so inter-word spacing must
+    // come from box geometry; merged boxes lose it ("you should" → "youshould").
+    detection: { maxSideLength: MAX_SIDE, paddingHorizontal: 0.15 },
     // canvas-native avoids the OpenCV.js dependency — lighter and MV3-friendly.
     processing: { engine: 'canvas-native' },
     // executionProviders are auto-resolved by the service (WebGPU → WASM).
@@ -95,40 +98,50 @@ const median = (xs: number[]): number => {
 
 const INDENT_SPACES = 4
 
-/**
- * Reconstruct code from line-grouped boxes: leading indentation from each line's
- * left edge, plus intra-line spacing from horizontal gaps. Robust to the per-line
- * strategy returning a single box per line (then only indent applies).
- *
- * box.width/text.length overestimates the glyph advance (padding/anti-alias), so
- * raw indent slightly undercounts. We quantize: detect the one-level unit (the
- * smallest clear positive offset) and snap each line to whole levels × 4 spaces,
- * which recovers clean nesting. Falls back to raw char-units if no unit emerges.
- */
-function reconstructCode(lines: RecognitionResult[][]): string {
-  const flat = lines.flat()
-  if (!flat.length) return ''
+const hasText = (w: RecognitionResult): boolean => w.text.trim().length > 0
 
-  const charW = median(flat.filter((w) => w.text.length).map((w) => w.box.width / w.text.length)) || 1
+interface Row {
+  raw: number // leading indent in char units
+  text: string // line text with intra-line spacing reconstructed from gaps
+}
+
+/**
+ * Build one Row per visual line from box geometry. The recognizer dict has no
+ * space token, so spacing is reconstructed: a space wherever there's a gap
+ * between adjacent boxes. Empty/whitespace boxes (detection produces duplicate
+ * blanks) are dropped. charW = median(box.width / text.length) is the glyph
+ * advance and cancels the upscale factor.
+ */
+function buildRows(lines: RecognitionResult[][]): { rows: Row[]; charW: number } {
+  const flat = lines.flat().filter(hasText)
+  if (!flat.length) return { rows: [], charW: 1 }
+
+  const charW = median(flat.map((w) => w.box.width / w.text.length)) || 1
   const minLeft = Math.min(...flat.map((w) => w.box.x))
 
-  // Per line: raw indent (in char units) + the reconstructed line text.
-  const rows = lines.map((line) => {
-    if (!line.length) return { raw: 0, text: '' }
-    const sorted = [...line].sort((a, b) => a.box.x - b.box.x)
-    const raw = (sorted[0].box.x - minLeft) / charW
-    let text = sorted[0].text
-    for (let i = 1; i < sorted.length; i++) {
-      const gap = sorted[i].box.x - (sorted[i - 1].box.x + sorted[i - 1].box.width)
-      text += ' '.repeat(Math.max(1, Math.round(gap / charW))) + sorted[i].text
+  const rows: Row[] = []
+  for (const line of lines) {
+    const ws = line.filter(hasText).sort((a, b) => a.box.x - b.box.x)
+    if (!ws.length) continue
+    let text = ws[0].text
+    for (let i = 1; i < ws.length; i++) {
+      const gap = ws[i].box.x - (ws[i - 1].box.x + ws[i - 1].box.width)
+      text += ' '.repeat(Math.max(1, Math.round(gap / charW))) + ws[i].text
     }
-    return { raw, text }
-  })
+    rows.push({ raw: (ws[0].box.x - minLeft) / charW, text })
+  }
+  return { rows, charW }
+}
 
+/**
+ * Code view: prose lines + leading indentation. Indent is quantized — detect the
+ * one-level unit (smallest clear positive offset) and snap to whole levels × 4
+ * spaces, which recovers clean nesting despite box-padding inflating charW.
+ */
+function toCodeText(rows: Row[]): string {
   const positives = rows.map((r) => r.raw).filter((v) => v > 0.5)
   const unit = positives.length ? Math.min(...positives) : 0
-  const quantize = unit > 0.5 && unit < 12 // sane one-indent width in chars
-
+  const quantize = unit > 0.5 && unit < 12
   return rows
     .map((r) => {
       const indent = quantize
@@ -145,18 +158,19 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   const canvas = await prepareImage(imageBuffer)
   const res = await svc.recognize(canvas, { flatten: false })
 
-  const words: OcrWord[] = res.lines.flat().map((r) => ({
-    text: r.text,
-    confidence: r.confidence,
-    box: r.box, // ppu-paddle-ocr Box is already {x,y,width,height}
-  }))
+  const words: OcrWord[] = res.lines
+    .flat()
+    .filter(hasText)
+    .map((r) => ({ text: r.text, confidence: r.confidence, box: r.box }))
+
+  const { rows } = buildRows(res.lines)
 
   return {
-    text: res.text, // prose: lines joined by newlines
-    codeText: reconstructCode(res.lines),
+    text: rows.map((r) => r.text).join('\n'), // prose: gap-spaced, no indent
+    codeText: toCodeText(rows),
     words,
     backend,
-    empty: words.length === 0,
+    empty: rows.length === 0,
     lines: res.lines,
   }
 }

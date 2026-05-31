@@ -60,12 +60,22 @@ function renderText() {
     textEl.textContent = lastResult.codeText
     return
   }
+  // Prose: per-word spans (confidence underlines), with line breaks inferred from
+  // vertical jumps between consecutive word boxes.
+  let prevY: number | null = null
+  let prevH = 0
   for (const w of lastResult.words) {
+    if (prevY !== null && w.box.y > prevY + prevH * 0.5) {
+      textEl.appendChild(document.createTextNode('\n'))
+    }
     const span = document.createElement('span')
-    span.textContent = w.text + ' '
+    span.textContent = w.text
     if (w.confidence < LOW_CONFIDENCE) span.className = 'uncertain'
     span.title = `confidence ${(w.confidence * 100).toFixed(0)}%`
     textEl.appendChild(span)
+    textEl.appendChild(document.createTextNode(' '))
+    prevY = w.box.y
+    prevH = w.box.height
   }
 }
 
