@@ -8,3 +8,4 @@ dist/
 dist-test/
 scripts/ocr-bench/img/
 scripts/ocr-bench/cases.json
+.layout-probe/
