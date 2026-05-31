@@ -51,6 +51,8 @@ console.log(
 )
 
 // --- Reconstruction (mirrors src/offscreen/engine.ts) -----------------------
+const HOMO = { Ν: 'N', Ο: 'O', Ρ: 'P', Τ: 'T', ν: 'v', ο: 'o', ρ: 'p', τ: 't', а: 'a', е: 'e', о: 'o', с: 'c', р: 'p', у: 'y', х: 'x' }
+const deHomoglyph = (s) => Array.from(s, (c) => HOMO[c] ?? c).join('')
 const hasText = (w) => w.text.trim().length > 0
 const median = (xs) => {
   if (!xs.length) return 0
@@ -66,6 +68,7 @@ function proseFromLines(lines) {
   for (const line of lines) {
     const ws = line.filter(hasText).sort((a, b) => a.box.x - b.box.x)
     if (!ws.length) continue
+    for (const w of ws) w.text = deHomoglyph(w.text)
     let text = ws[0].text
     for (let i = 1; i < ws.length; i++) {
       const gap = ws[i].box.x - (ws[i - 1].box.x + ws[i - 1].box.width)

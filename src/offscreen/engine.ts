@@ -107,9 +107,27 @@ const INDENT_SPACES = 4
 
 const hasText = (w: RecognitionResult): boolean => w.text.trim().length > 0
 
+// Our recognizer is Latin-only, so any Greek/Cyrillic glyph it emits is a misread
+// of a visually identical Latin letter (e.g. Latin "v" → Greek "ν"). Map the
+// well-known look-alikes back to Latin; leave anything without a clean equivalent
+// untouched (don't guess).
+const HOMOGLYPHS: Record<string, string> = {
+  // Greek → Latin
+  Α: 'A', Β: 'B', Ε: 'E', Ζ: 'Z', Η: 'H', Ι: 'I', Κ: 'K', Μ: 'M', Ν: 'N',
+  Ο: 'O', Ρ: 'P', Τ: 'T', Υ: 'Y', Χ: 'X', α: 'a', ε: 'e', ι: 'i', κ: 'k',
+  ν: 'v', ο: 'o', ρ: 'p', τ: 't', υ: 'u', χ: 'x',
+  // Cyrillic → Latin
+  А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C',
+  Т: 'T', У: 'Y', Х: 'X', а: 'a', в: 'v', е: 'e', к: 'k', м: 'm', н: 'h',
+  о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x',
+}
+const deHomoglyph = (s: string): string =>
+  Array.from(s, (ch) => HOMOGLYPHS[ch] ?? ch).join('')
+
 interface Row {
   raw: number // leading indent in char units
   text: string // line text with intra-line spacing reconstructed from gaps
+  top: number // line's top y (for blank-line detection)
 }
 
 /**
@@ -135,28 +153,41 @@ function buildRows(lines: RecognitionResult[][]): { rows: Row[]; charW: number }
       const gap = ws[i].box.x - (ws[i - 1].box.x + ws[i - 1].box.width)
       text += ' '.repeat(Math.max(1, Math.round(gap / charW))) + ws[i].text
     }
-    rows.push({ raw: (ws[0].box.x - minLeft) / charW, text })
+    const top = Math.min(...ws.map((w) => w.box.y))
+    rows.push({ raw: (ws[0].box.x - minLeft) / charW, text, top })
   }
   return { rows, charW }
 }
 
 /**
- * Code view: prose lines + leading indentation. Indent is quantized — detect the
- * one-level unit (smallest clear positive offset) and snap to whole levels × 4
- * spaces, which recovers clean nesting despite box-padding inflating charW.
+ * Code view: prose lines + leading indentation, with blank lines restored. Indent
+ * is quantized — detect the one-level unit (smallest clear positive offset) and
+ * snap to whole levels × 4 spaces, recovering clean nesting despite box-padding
+ * inflating charW. Blank lines are inferred from vertical gaps: when two lines are
+ * ~N line-pitches apart, insert N-1 blank lines between them.
  */
 function toCodeText(rows: Row[]): string {
+  if (!rows.length) return ''
   const positives = rows.map((r) => r.raw).filter((v) => v > 0.5)
   const unit = positives.length ? Math.min(...positives) : 0
   const quantize = unit > 0.5 && unit < 12
-  return rows
-    .map((r) => {
-      const indent = quantize
-        ? Math.max(0, Math.round(r.raw / unit)) * INDENT_SPACES
-        : Math.max(0, Math.round(r.raw))
-      return ' '.repeat(indent) + r.text
-    })
-    .join('\n')
+  const indentOf = (r: Row) =>
+    quantize ? Math.max(0, Math.round(r.raw / unit)) * INDENT_SPACES : Math.max(0, Math.round(r.raw))
+
+  // Typical line-to-line distance, used to detect blank lines.
+  const diffs: number[] = []
+  for (let i = 1; i < rows.length; i++) diffs.push(rows[i].top - rows[i - 1].top)
+  const pitch = median(diffs.filter((d) => d > 0))
+
+  const out: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (i > 0 && pitch > 0) {
+      const blanks = Math.max(0, Math.round((rows[i].top - rows[i - 1].top) / pitch) - 1)
+      for (let b = 0; b < blanks; b++) out.push('')
+    }
+    out.push(' '.repeat(indentOf(rows[i])) + rows[i].text)
+  }
+  return out.join('\n')
 }
 
 /** Run detection + recognition on encoded image bytes (e.g. a PNG ArrayBuffer). */
@@ -164,6 +195,9 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   const svc = await getService()
   const canvas = await prepareImage(imageBuffer)
   const res = await svc.recognize(canvas, { flatten: false })
+
+  // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin.
+  for (const line of res.lines) for (const w of line) w.text = deHomoglyph(w.text)
 
   // Carry the engine's line grouping (more reliable than re-deriving from box y
   // in the panel) so the prose view breaks lines exactly where text wraps.
