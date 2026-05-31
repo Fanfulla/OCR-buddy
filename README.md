@@ -15,8 +15,8 @@ family — **detection + CTC recognition (PaddleOCR PP-OCRv5, Apache-2.0)** — 
 - runs **100% in-browser** via ONNX Runtime Web (WebGPU, WASM fallback),
 - exposes **per-word confidence** so uncertain output is flagged, not trusted silently.
 
-The full research behind these choices is in [`research/`](./research/) — start with
-[`OCR_BUDDY_RESEARCH.md`](./research/OCR_BUDDY_RESEARCH.md).
+These choices come from a detailed evaluation of in-browser OCR runtimes, SOTA
+models, licenses, and accuracy/hallucination trade-offs as of mid-2026.
 
 ## Architecture
 
