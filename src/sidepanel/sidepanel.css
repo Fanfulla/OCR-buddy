@@ -69,6 +69,10 @@ header {
   display: flex;
   flex-direction: column;
 }
+/* `display:flex` above would otherwise defeat the [hidden] attribute. */
+.state[hidden] {
+  display: none;
+}
 
 #state-idle,
 #state-busy,

@@ -66,8 +66,9 @@ async function getService(): Promise<PaddleOcrService> {
     // (charactersDictionary is loaded from model.charactersDictionary at runtime;
     // the type marks it required, so cast.)
     recognition: { strategy: 'per-box' } as RecognitionOptions,
-    // Tighter horizontal padding so per-box crops don't overlap into duplicates.
-    detection: { maxSideLength: MAX_SIDE, paddingHorizontal: 0.15 },
+    // Keep ppu's default horizontal padding — tightening it cut off edge glyphs
+    // ("Rafael" → "Rafae"). per-box already gives correct spacing.
+    detection: { maxSideLength: MAX_SIDE },
     // canvas-native avoids the OpenCV.js dependency — lighter and MV3-friendly.
     processing: { engine: 'canvas-native' },
     // executionProviders are auto-resolved by the service (WebGPU → WASM).
