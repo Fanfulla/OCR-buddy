@@ -9,6 +9,7 @@
 import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
 import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
+import { detectLayout, type LayoutLabel, type Region } from './layout'
 import type { OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
@@ -274,4 +275,87 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
     empty: rows.length === 0,
     lines,
   }
+}
+
+// ── Document mode: layout analysis → per-region OCR → structured Markdown ─────
+
+type RegionKind = 'title' | 'paragraph' | 'caption' | 'table' | 'figure' | 'equation' | 'skip'
+function classifyRegion(label: LayoutLabel): RegionKind {
+  switch (label) {
+    case 'Title':
+      return 'title'
+    case 'Text':
+    case 'Reference':
+      return 'paragraph'
+    case 'Figure caption':
+    case 'Table caption':
+      return 'caption'
+    case 'Table':
+      return 'table'
+    case 'Figure':
+      return 'figure'
+    case 'Equation':
+      return 'equation'
+    default:
+      return 'skip' // Header / Footer
+  }
+}
+
+/** Reading order: column-major (full-width regions read with the left column),
+ * each column top-to-bottom. Good enough for 1–2 column papers. */
+function orderRegions(regions: Region[], pageW: number): Region[] {
+  const mid = pageW * 0.5
+  const band = (r: Region) =>
+    r.box.width > 0.55 * pageW ? 0 : r.box.x + r.box.width / 2 < mid ? 0 : 1
+  return [...regions].sort((a, b) => band(a) - band(b) || a.box.y - b.box.y)
+}
+
+async function cropToBuffer(bitmap: ImageBitmap, box: Region['box']): Promise<ArrayBuffer> {
+  const w = Math.max(1, Math.round(box.width))
+  const h = Math.max(1, Math.round(box.height))
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(bitmap, box.x, box.y, box.width, box.height, 0, 0, w, h)
+  return (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()
+}
+
+export interface DocOutput {
+  docText: string
+  backend: 'webgpu' | 'wasm'
+  empty: boolean
+}
+
+/** Run layout detection, then OCR each text region in reading order and assemble
+ * a Markdown document. Tables/figures/equations are placeholders for now. */
+export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOutput> {
+  const bitmap = await createImageBitmap(new Blob([imageBuffer]))
+  const regions = await detectLayout(bitmap)
+  const ordered = orderRegions(regions, bitmap.width)
+
+  const parts: string[] = []
+  for (const r of ordered) {
+    const kind = classifyRegion(r.label)
+    if (kind === 'skip') continue
+    if (kind === 'table') {
+      parts.push('> **[ Table ]** — structured Markdown coming soon')
+      continue
+    }
+    if (kind === 'equation') {
+      parts.push('> **[ Equation ]** — LaTeX coming soon')
+      continue
+    }
+    if (kind === 'figure') {
+      parts.push('> **[ Figure ]**')
+      continue
+    }
+    // Text-like region → OCR its crop independently (no cross-column merging).
+    const out = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
+    const text = out.text.trim().replace(/\n/g, kind === 'paragraph' ? ' ' : ' ')
+    if (!text) continue
+    if (kind === 'title') parts.push(`## ${text}`)
+    else if (kind === 'caption') parts.push(`*${text}*`)
+    else parts.push(text)
+  }
+  bitmap.close()
+  return { docText: parts.join('\n\n'), backend, empty: parts.length === 0 }
 }

@@ -145,6 +145,30 @@ header {
   word-break: break-all;
 }
 
+.doc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  margin-top: 4px;
+}
+.doc-toggle small {
+  opacity: 0.7;
+}
+.doc-toggle input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+/* `display:flex` on .seg would otherwise defeat [hidden]. */
+.seg[hidden] {
+  display: none;
+}
+
 .hint {
   color: var(--muted);
   font-size: 13px;

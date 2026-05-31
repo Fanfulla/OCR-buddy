@@ -2,7 +2,7 @@
 // cross-origin isolated (COOP/COEP) and WebGPU-capable, so we run the engine
 // (ppu-paddle-ocr / PP-OCRv5) here directly — no separate worker for v1.
 
-import { recognizeBuffer } from './engine'
+import { recognizeBuffer, recognizeDocument } from './engine'
 import type { Message, OcrResult, OcrStatus, RunOcr } from '../shared/messages'
 
 if (!crossOriginIsolated) {
@@ -16,9 +16,25 @@ function post(msg: OcrStatus | OcrResult): void {
 async function run(req: RunOcr): Promise<void> {
   try {
     post({ type: 'OCR_STATUS', stage: 'loading-model' })
-    // TODO(super-res): for low-res video frames, upscale the crop before
-    //   recognition (biggest quality lever for the code-from-video case).
     const imageBuffer = await (await fetch(req.imageDataUrl)).arrayBuffer()
+
+    if (req.mode === 'document') {
+      post({ type: 'OCR_STATUS', stage: 'detecting' })
+      const out = await recognizeDocument(imageBuffer)
+      post({ type: 'OCR_STATUS', stage: 'done' })
+      post({
+        type: 'OCR_RESULT',
+        mode: 'document',
+        text: out.docText,
+        codeText: out.docText,
+        docText: out.docText,
+        words: [],
+        backend: out.backend,
+        imageDataUrl: req.imageDataUrl,
+        empty: out.empty,
+      })
+      return
+    }
 
     post({ type: 'OCR_STATUS', stage: 'recognizing' })
     const out = await recognizeBuffer(imageBuffer)
@@ -26,6 +42,7 @@ async function run(req: RunOcr): Promise<void> {
     post({ type: 'OCR_STATUS', stage: 'done' })
     post({
       type: 'OCR_RESULT',
+      mode: 'quick',
       text: out.text,
       codeText: out.codeText,
       words: out.words,

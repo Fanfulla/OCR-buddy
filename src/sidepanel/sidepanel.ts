@@ -33,6 +33,7 @@ const seg = document.querySelector<HTMLElement>('.seg')!
 const segProse = $<HTMLButtonElement>('seg-prose')
 const segCode = $<HTMLButtonElement>('seg-code')
 const copyBtn = $<HTMLButtonElement>('copy')
+const docModeEl = $<HTMLInputElement>('doc-mode')
 
 type State = 'idle' | 'busy' | 'result' | 'error' | 'permission'
 const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission']
@@ -80,7 +81,7 @@ function showStage(stage: Exclude<OcrStage, 'error'>, progress?: number) {
 }
 
 function startSelection() {
-  chrome.runtime.sendMessage({ type: 'START_SELECTION' } satisfies StartSelection)
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', document: docModeEl.checked } satisfies StartSelection)
   busyLabel.textContent = 'Starting…'
   progressFill.style.width = '8%'
   spinnerEl.hidden = false
@@ -160,6 +161,8 @@ function renderResult(r: OcrResult) {
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
+  // Document mode has no Prose/Code split — it's an assembled Markdown page.
+  seg.hidden = r.mode === 'document'
   renderText()
   setState('result')
 }
@@ -169,6 +172,14 @@ function renderResult(r: OcrResult) {
 function renderText() {
   if (!lastResult) return
   textEl.replaceChildren()
+
+  if (lastResult.mode === 'document') {
+    textEl.classList.remove('hljs')
+    textEl.contentEditable = 'false'
+    textEl.textContent = lastResult.docText ?? ''
+    uncertainSummary.hidden = true
+    return
+  }
 
   if (codeMode) {
     // hljs auto-detects the language and escapes the input, so innerHTML is safe.

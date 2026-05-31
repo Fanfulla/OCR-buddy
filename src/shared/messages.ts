@@ -15,6 +15,8 @@ export interface Rect {
 /** Panel → SW: user pressed "Select region"; begin a capture on the active tab. */
 export interface StartSelection {
   type: 'START_SELECTION'
+  /** Document mode: run layout analysis + structured assembly instead of quick OCR. */
+  document?: boolean
 }
 
 /** SW → content overlay: show the selection overlay on the page. */
@@ -49,6 +51,8 @@ export interface RunOcr {
   imageDataUrl: string
   /** v1 language scope. */
   langs: string[]
+  /** 'document' runs layout analysis + structured assembly; default quick OCR. */
+  mode?: 'quick' | 'document'
 }
 
 export type OcrStage =
@@ -84,10 +88,14 @@ export interface OcrWord {
 /** Final result. */
 export interface OcrResult {
   type: 'OCR_RESULT'
+  /** 'document' results carry a Markdown `docText`; 'quick' carry text/code/words. */
+  mode: 'quick' | 'document'
   /** Prose text: lines joined naturally (reading order). */
   text: string
   /** Code view: line breaks + indentation reconstructed from box geometry. */
   codeText: string
+  /** Document mode: assembled Markdown of the page (layout-driven). */
+  docText?: string
   words: OcrWord[]
   /** Which backend actually ran. */
   backend: 'webgpu' | 'wasm'

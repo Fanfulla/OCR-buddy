@@ -29,8 +29,12 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 type Pending = { kind: 'select'; tabId: number } | { kind: 'capture'; req: CaptureRequest }
 let pending: Pending | null = null
 
+// Capture mode chosen at selection time (quick OCR vs document layout analysis).
+let captureMode: 'quick' | 'document' = 'quick'
+
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   if (msg.type === 'START_SELECTION') {
+    captureMode = msg.document ? 'document' : 'quick'
     void startActiveTabSelection()
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
@@ -106,6 +110,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
       type: 'RUN_OCR',
       imageDataUrl: cropDataUrl,
       langs: V1_LANGS,
+      mode: captureMode,
     }
     await chrome.runtime.sendMessage(runMsg)
   } catch (err) {
