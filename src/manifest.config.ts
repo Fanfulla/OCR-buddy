@@ -58,6 +58,7 @@ export default defineManifest({
 
   permissions: [
     'activeTab', // captureVisibleTab on the tab where invoked
+    'scripting', // inject the selection overlay on demand (tabs missing it)
     'offscreen', // host the warm model + worker off the service worker
     'sidePanel', // durable result UI
     'storage', // small settings

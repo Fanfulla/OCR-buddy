@@ -24,8 +24,10 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   await startSelection(tab.id)
 })
 
-// Last capture, kept so we can retry it after the user grants per-site permission.
-let pendingCapture: CaptureRequest | null = null
+// The action to retry after the user grants per-site permission: either a
+// selection that couldn't start (overlay/host access) or a capture that failed.
+type Pending = { kind: 'select'; tabId: number } | { kind: 'capture'; req: CaptureRequest }
+let pending: Pending | null = null
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   if (msg.type === 'START_SELECTION') {
@@ -33,7 +35,8 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
   } else if (msg.type === 'PERMISSION_GRANTED') {
-    if (pendingCapture) void handleCapture(pendingCapture)
+    if (pending?.kind === 'capture') void handleCapture(pending.req)
+    else if (pending?.kind === 'select') void startSelection(pending.tabId)
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
   // via broadcast — no relay needed here.
@@ -47,25 +50,50 @@ async function startActiveTabSelection(): Promise<void> {
   await startSelection(tab.id)
 }
 
-/** Show the selection overlay on a tab; guide the user if it isn't reachable. */
+/** Show the overlay on a tab, injecting it first if the content script is absent.
+ * If we lack host access, ask the user to grant capture for this site. */
 async function startSelection(tabId: number): Promise<void> {
+  pending = { kind: 'select', tabId }
+  if (await showOverlay(tabId)) return
+  try {
+    await injectOverlay(tabId) // needs host access (activeTab / granted host)
+    if (await showOverlay(tabId)) return
+  } catch {
+    // injection blocked — fall through to the permission prompt
+  }
+  chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: await originOf(tabId) })
+}
+
+/** Tell the overlay (if present) to show; true on success. */
+async function showOverlay(tabId: number): Promise<boolean> {
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'selecting' })
+    return true
   } catch {
-    // No overlay content script here (page predates the extension load, or it's a
-    // restricted page like chrome://). Tell the user how to recover.
-    chrome.runtime.sendMessage({
-      type: 'OCR_STATUS',
-      stage: 'error',
-      message:
-        'Can’t start here. Reload the page (Ctrl/Cmd+R), or press Ctrl+Shift+Y on the tab you want to capture. Browser pages (chrome://) can’t be captured.',
-    })
+    return false
+  }
+}
+
+/** Inject the overlay content script on demand (path read from the built manifest). */
+async function injectOverlay(tabId: number): Promise<void> {
+  const file = chrome.runtime.getManifest().content_scripts?.[0]?.js?.[0]
+  if (!file) throw new Error('overlay script not found in manifest')
+  await chrome.scripting.executeScript({ target: { tabId }, files: [file] })
+}
+
+/** Best-effort tab origin (empty if we can't read it without permission). */
+async function originOf(tabId: number): Promise<string> {
+  try {
+    const tab = await chrome.tabs.get(tabId)
+    return tab.url ? new URL(tab.url).origin : ''
+  } catch {
+    return ''
   }
 }
 
 async function handleCapture(req: CaptureRequest): Promise<void> {
-  pendingCapture = req
+  pending = { kind: 'capture', req }
   try {
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     // captureVisibleTab returns CLEAN composited pixels — taint-free even over

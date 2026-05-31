@@ -70,6 +70,11 @@ header {
 }
 
 /* Backend status pill */
+/* `display:inline-flex` below would otherwise defeat the [hidden] attribute,
+   showing an empty dot-only badge at idle. */
+.badge[hidden] {
+  display: none;
+}
 .badge {
   margin-left: auto;
   display: inline-flex;

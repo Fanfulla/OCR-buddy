@@ -103,7 +103,7 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
     }
   } else if (msg.type === 'NEED_PERMISSION') {
     needOrigin = msg.origin
-    permOrigin.textContent = msg.origin
+    permOrigin.textContent = msg.origin || 'this tab'
     permWhy.hidden = true
     setState('permission')
   } else if (msg.type === 'OCR_RESULT') {
@@ -114,7 +114,8 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
 
 permEnable.addEventListener('click', async () => {
   // Must run in a user gesture (this click) — the side panel is an extension page.
-  const granted = await chrome.permissions.request({ origins: [`${needOrigin}/*`] })
+  const origins = needOrigin ? [`${needOrigin}/*`] : ['<all_urls>']
+  const granted = await chrome.permissions.request({ origins })
   if (granted) {
     chrome.runtime.sendMessage({ type: 'PERMISSION_GRANTED' } satisfies PermissionGranted)
     busyLabel.textContent = 'Capturing region…'

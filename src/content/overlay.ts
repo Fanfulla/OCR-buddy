@@ -61,13 +61,18 @@ function showOverlay() {
   function teardown() {
     root.remove()
     w[OVERLAY_FLAG] = false
-    document.removeEventListener('keydown', onKey)
+    window.removeEventListener('keydown', onKey, true)
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') teardown()
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      teardown()
+    }
   }
-  document.addEventListener('keydown', onKey)
+  // Capture phase: get Esc before the page (PDF viewer / YouTube intercept it).
+  window.addEventListener('keydown', onKey, true)
 
   root.addEventListener('mousedown', (e) => {
     dragging = true
