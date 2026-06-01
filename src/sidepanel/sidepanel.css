@@ -6,7 +6,9 @@
   --border-soft: #2b2b32;
   --fg: #ececef;
   --muted: #9a9aa4;
-  --faint: #6a6a74;
+  /* Was #6a6a74 (~3:1 on --bg) — too low for the 10.5px uppercase labels &
+     mode-desc. Lightened to clear WCAG AA (4.5:1) for small text. */
+  --faint: #858590;
   --accent: #4f9cff;
   --accent-press: #3d86e6;
   --accent-ink: #06203f;
@@ -145,6 +147,23 @@ header {
   word-break: break-all;
 }
 
+/* Capture mode is a precondition of "Select region" — grouped + labelled above it. */
+.mode-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.mode-group-label {
+  color: var(--muted);
+}
+.mode-group .mode-pick {
+  margin-top: 0;
+}
+.mode-group .mode-desc {
+  margin-top: 0;
+}
+
 /* Capture-mode picker (Text / Document / Formula) — segmented, on the idle card. */
 .mode-pick {
   display: flex;
@@ -172,6 +191,10 @@ header {
 }
 .mode-btn:hover {
   color: var(--fg);
+}
+.mode-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .mode-btn.is-active {
   background: var(--accent);
@@ -567,6 +590,10 @@ figure {
 }
 .seg-btn.is-active {
   color: #fff;
+}
+.seg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .text {

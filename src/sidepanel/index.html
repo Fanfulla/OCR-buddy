@@ -42,6 +42,16 @@
         <h1>Extract text from anything</h1>
         <p class="hint">Capture any region of the page — code, prose, or a screenshot of text — and OCR it locally.</p>
       </div>
+      <!-- Mode is a precondition of "Select region", so it sits above the button. -->
+      <div class="mode-group">
+        <span class="section-label mode-group-label">Capture mode</span>
+        <div id="mode-pick-idle" class="mode-pick" role="radiogroup" aria-label="Capture mode">
+          <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" tabindex="0" data-mode="quick">Text/Code</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="formula">Formula</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="table">Table</button>
+        </div>
+        <p id="mode-desc" class="mode-desc">Text/Code — code, prose, or any text.</p>
+      </div>
       <button id="select-btn" class="btn btn-primary big" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 7V5a2 2 0 0 1 2-2h2" />
@@ -54,12 +64,6 @@
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
-      <div id="mode-pick-idle" class="mode-pick" role="radiogroup" aria-label="Capture mode">
-        <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text/Code</button>
-        <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
-        <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="table">Table</button>
-      </div>
-      <p id="mode-desc" class="mode-desc">Quick OCR — code, prose, or any text.</p>
     </section>
 
     <!-- BUSY -->
@@ -67,7 +71,7 @@
       <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
       <div class="busy-stage">
         <div id="spinner" class="spinner"></div>
-        <p id="busy-label" class="hint"></p>
+        <p id="busy-label" class="hint" role="status" aria-live="polite"></p>
       </div>
 
       <!-- Skeleton of the upcoming result: honest about layout, sets expectation. -->
@@ -112,9 +116,9 @@
       <div class="reinterpret">
         <span class="section-label">Read as</span>
         <div id="mode-pick-result" class="mode-pick" role="radiogroup" aria-label="Reinterpret as">
-          <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text/Code</button>
-          <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
-          <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="table">Table</button>
+          <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" tabindex="0" data-mode="quick">Text/Code</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="formula">Formula</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="table">Table</button>
         </div>
       </div>
 
@@ -122,8 +126,8 @@
         <span class="section-label">Extracted text</span>
         <div class="seg" role="tablist" aria-label="View mode" data-mode="prose">
           <span class="seg-thumb" aria-hidden="true"></span>
-          <button id="seg-prose" class="seg-btn is-active" type="button" role="tab" aria-selected="true">Prose</button>
-          <button id="seg-code" class="seg-btn" type="button" role="tab" aria-selected="false">Code</button>
+          <button id="seg-prose" class="seg-btn is-active" type="button" role="tab" aria-selected="true" tabindex="0">Prose</button>
+          <button id="seg-code" class="seg-btn" type="button" role="tab" aria-selected="false" tabindex="-1">Code</button>
         </div>
       </div>
 
@@ -147,15 +151,9 @@
         <span>No confident text found in this region. Nothing was invented.</span>
       </p>
 
+      <!-- Copy is the goal of the flow → primary. New capture → secondary. -->
       <div class="actions">
-        <button id="copy" class="btn btn-secondary" type="button">
-          <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="11" height="11" rx="2" />
-            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-          </svg>
-          <span class="copy-label">Copy</span>
-        </button>
-        <button id="new-capture" class="btn btn-primary" type="button">
+        <button id="new-capture" class="btn btn-secondary" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7V5a2 2 0 0 1 2-2h2" />
             <path d="M17 3h2a2 2 0 0 1 2 2v2" />
@@ -163,6 +161,13 @@
             <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
           </svg>
           New capture
+        </button>
+        <button id="copy" class="btn btn-primary" type="button">
+          <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          <span class="copy-label">Copy</span>
         </button>
       </div>
     </section>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — OCR Buddy</title>
+<meta name="description" content="OCR Buddy's privacy policy. OCR Buddy runs entirely on your device: it collects nothing, transmits nothing, and has no servers, accounts, or telemetry." />
+<meta name="robots" content="index, follow" />
+<meta name="theme-color" content="#121216" />
+<link rel="canonical" href="https://ocr-buddy.com/privacy" />
+<link rel="icon" type="image/png" sizes="128x128" href="assets/icons/icon-128.png" />
+<style>
+  :root {
+    --bg: #121216; --bg-2: #16161b; --surface: #1c1c22; --surface-2: #23232a;
+    --border: #2c2c34; --border-soft: #24242b; --fg: #f0f0f3; --muted: #9c9ca6;
+    --faint: #74747e; --accent: #4f9cff; --ok: #54c98a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.7 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 24px; background: rgba(18,18,22,.82);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-soft);
+  }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; color: var(--fg); }
+  .tile {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px; color: #fff;
+    background: linear-gradient(135deg, #5aa4ff, #3a82e6);
+    box-shadow: 0 2px 10px -3px rgba(79,156,255,.7);
+  }
+  .tile svg { width: 17px; height: 17px; }
+  header .back { margin-left: auto; font-size: 14px; color: var(--muted); }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
+  h1 { font-size: 38px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 6px; }
+  .updated { color: var(--faint); font-size: 14px; margin: 0 0 36px; }
+  h2 { font-size: 21px; letter-spacing: -.01em; margin: 40px 0 10px; }
+  p, li { color: #d9d9de; }
+  .lead { font-size: 18px; color: var(--fg); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  strong { color: var(--fg); }
+  .callout {
+    margin: 24px 0; padding: 18px 20px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .callout.ok { border-color: rgba(84,201,138,.35); background: rgba(84,201,138,.07); }
+  code { font: 13px ui-monospace, "SF Mono", Menlo, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { color: var(--faint); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  footer { border-top: 1px solid var(--border-soft); padding: 28px 24px; color: var(--faint); font-size: 14px; text-align: center; }
+  footer a { color: var(--muted); margin: 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <span class="tile" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <g stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5.2 9.4V5.2h4.2"/><path d="M14.6 5.2h4.2v4.2"/><path d="M18.8 14.6v4.2h-4.2"/><path d="M9.4 18.8H5.2v-4.2"/>
+        </g>
+        <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+          <path d="M8 9.7h8"/><path d="M8 12h8"/><path d="M8 14.3h4.6"/>
+        </g>
+      </svg>
+    </span>
+    OCR Buddy
+  </a>
+  <a class="back" href="/">← Back to home</a>
+</header>
+
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: June 1, 2026</p>
+
+  <p class="lead">OCR Buddy runs entirely on your device. It has no servers, no accounts, and no telemetry. It does not collect, transmit, sell, or share any of your data — full stop.</p>
+
+  <div class="callout ok">
+    <strong>The short version:</strong> the image region you capture and the text it produces never leave your computer. There is nothing to upload because there is nowhere to upload it to.
+  </div>
+
+  <h2>1. Who this covers</h2>
+  <p>This policy applies to the <strong>OCR Buddy</strong> Chrome extension and the website <a href="https://ocr-buddy.com">ocr-buddy.com</a>. OCR Buddy is free, open-source software released under the MIT license; its full source is on <a href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener">GitHub</a>.</p>
+
+  <h2>2. What the extension processes</h2>
+  <p>When you select a region of a page, OCR Buddy captures an image of that region and recognizes the text in it. This happens <strong>entirely on your device</strong>, in memory, using OCR models bundled inside the extension. The captured image and the extracted text are <strong>not stored, not logged, and not transmitted anywhere</strong>. They exist only for as long as the result is shown in the side panel.</p>
+
+  <table>
+    <thead><tr><th>Data</th><th>Where it goes</th><th>Stored?</th></tr></thead>
+    <tbody>
+      <tr><td>Captured screen region (image)</td><td>Processed locally, in memory</td><td>No</td></tr>
+      <tr><td>Recognized text / LaTeX / Markdown</td><td>Shown to you in the side panel; copied only when you click Copy</td><td>No</td></tr>
+      <tr><td>Your settings (capture mode, Prose/Code view)</td><td>Saved locally via <code>chrome.storage.local</code> on your device</td><td>Locally only</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. What we collect</h2>
+  <p><strong>Nothing.</strong> OCR Buddy has no analytics, no tracking, no cookies, no accounts, and no remote server. We never see what you capture, and we have no way to.</p>
+
+  <h2>4. Network use</h2>
+  <p>OCR Buddy performs OCR with <strong>no network connection at all</strong> — the models ship inside the extension, so it works fully offline. The only network activity is Chrome downloading the extension (and its updates) from the Chrome Web Store, which is governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's privacy policy</a>, not ours.</p>
+
+  <h2>5. Permissions and why they are needed</h2>
+  <ul>
+    <li><strong>activeTab</strong> — to screenshot the visible tab where you start a capture, only after you act.</li>
+    <li><strong>scripting</strong> — to draw the selection overlay on the page when you start a capture.</li>
+    <li><strong>offscreen</strong> — to run the OCR model in a background document, off the service worker.</li>
+    <li><strong>sidePanel</strong> — to show the result in Chrome's side panel.</li>
+    <li><strong>storage / unlimitedStorage</strong> — to remember your settings and to cache the bundled OCR model files on your device.</li>
+    <li><strong>Optional site access</strong> — requested per-site, at the moment you try to capture a tab you didn't invoke OCR Buddy on. The screenshot is gated behind your explicit consent.</li>
+  </ul>
+  <p>None of these permissions are used to collect or send data off your device.</p>
+
+  <h2>6. Data sharing</h2>
+  <p>We do not share, sell, rent, or transfer any user data to anyone, because we do not collect any.</p>
+
+  <h2>7. Children</h2>
+  <p>OCR Buddy is a general-purpose utility and is not directed at children under 13. It collects no personal information from anyone.</p>
+
+  <h2>8. Changes to this policy</h2>
+  <p>If this policy changes, the updated version will be posted at this URL with a new "Last updated" date. Material changes will be noted in the extension's release notes on GitHub.</p>
+
+  <h2>9. Contact</h2>
+  <p>Questions about privacy? Open an issue on <a href="https://github.com/Fanfulla/ocr-buddy/issues" target="_blank" rel="noopener">GitHub</a> or email <a href="mailto:contact@ocr-buddy.com">contact@ocr-buddy.com</a>.</p>
+</main>
+
+<footer>
+  <a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener">GitHub</a>
+  <div style="margin-top:10px">OCR Buddy — faithful, fully-local OCR for Chrome. MIT licensed.</div>
+</footer>
+</body>
+</html>

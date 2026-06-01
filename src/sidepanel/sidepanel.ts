@@ -48,13 +48,36 @@ const MODE_DESC: Record<CaptureMode, string> = {
   table: 'Table — one table → Markdown grid (works on borderless tables too).',
 }
 
-/** Highlight the button matching `mode` within a picker. */
+/** Highlight the button matching `mode` within a picker, and roll the roving
+ *  tabindex onto it so Tab lands on the active option (arrow keys move from there). */
 function syncPicker(pick: HTMLElement, mode: CaptureMode) {
   for (const b of pick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
     const on = b.dataset.mode === mode
     b.classList.toggle('is-active', on)
     b.setAttribute('aria-checked', String(on))
+    b.tabIndex = on ? 0 : -1
   }
+}
+
+// Persist the last-used capture mode + Prose/Code view across panel opens.
+const PREFS_KEY = 'sidepanel.prefs'
+function savePrefs() {
+  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode } })
+}
+async function restorePrefs() {
+  try {
+    const got = await chrome.storage.local.get(PREFS_KEY)
+    const p = got[PREFS_KEY] as { captureMode?: CaptureMode; codeMode?: boolean } | undefined
+    if (p?.captureMode === 'quick' || p?.captureMode === 'formula' || p?.captureMode === 'table') {
+      captureMode = p.captureMode
+    }
+    if (typeof p?.codeMode === 'boolean') codeMode = p.codeMode
+  } catch {
+    /* storage unavailable → keep defaults */
+  }
+  syncPicker(idlePick, captureMode)
+  modeDesc.textContent = MODE_DESC[captureMode]
+  setMode(codeMode)
 }
 
 // Idle picker: choose the mode for the NEXT capture.
@@ -63,6 +86,7 @@ for (const b of idlePick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
     captureMode = (b.dataset.mode as CaptureMode) ?? 'quick'
     syncPicker(idlePick, captureMode)
     modeDesc.textContent = MODE_DESC[captureMode]
+    savePrefs()
   })
 }
 
@@ -73,6 +97,7 @@ for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
     if (!lastResult || mode === lastResult.mode) return
     captureMode = mode
     syncPicker(resultPick, mode)
+    savePrefs()
     chrome.runtime.sendMessage({
       type: 'REPROCESS',
       imageDataUrl: lastResult.imageDataUrl,
@@ -205,6 +230,11 @@ permDismiss.addEventListener('click', () => {
 function setBackendBadge(backend: 'webgpu' | 'wasm') {
   backendEl.textContent = backend === 'wasm' ? 'WASM' : 'WebGPU'
   backendEl.dataset.backend = backend
+  // The amber WASM badge reads like a warning; clarify it's just the slower path.
+  backendEl.title =
+    backend === 'wasm'
+      ? 'Running on WebAssembly — slower than WebGPU, identical results'
+      : 'Running on WebGPU — hardware accelerated'
   backendEl.hidden = false
 }
 
@@ -230,6 +260,8 @@ function renderResult(r: OcrResult) {
   // Only quick mode has the Prose/Code split; formula & table don't.
   seg.hidden = r.mode !== 'quick'
   syncPicker(resultPick, r.mode)
+  // Label Copy by what it actually copies (raw LaTeX / Markdown / text).
+  copyBtn.querySelector('.copy-label')!.textContent = copyLabelFor(r.mode)
   renderText()
   setState('result')
 }
@@ -370,13 +402,45 @@ function setMode(code: boolean) {
   segProse.classList.toggle('is-active', !code)
   segCode.setAttribute('aria-selected', String(code))
   segProse.setAttribute('aria-selected', String(!code))
+  segCode.tabIndex = code ? 0 : -1
+  segProse.tabIndex = code ? -1 : 0
   renderText()
+  savePrefs()
 }
 segProse.addEventListener('click', () => setMode(false))
 segCode.addEventListener('click', () => setMode(true))
 
+// Roving-tabindex arrow-key navigation for the ARIA radiogroups + tablist, so the
+// keyboard contract their roles promise actually works. `activateOnMove` makes
+// selection follow focus (cheap idle picker + Prose/Code seg); the result picker
+// passes false — there, arrows only move focus and Enter/Space (native button
+// behaviour) commits, because activating fires a real OCR reprocess.
+function wireRovingKeys(container: HTMLElement, activateOnMove: boolean) {
+  container.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return
+    const items = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    const cur = items.indexOf(document.activeElement as HTMLButtonElement)
+    if (cur < 0) return
+    e.preventDefault()
+    let next = cur
+    if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = items.length - 1
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (cur + 1) % items.length
+    else next = (cur - 1 + items.length) % items.length
+    items[next].focus()
+    if (activateOnMove) items[next].click()
+  })
+}
+wireRovingKeys(idlePick, true)
+wireRovingKeys(resultPick, false)
+wireRovingKeys(seg, true)
+
 const COPY_ICON = '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path>'
 const CHECK_ICON = '<polyline points="20 6 9 17 4 12"></polyline>'
+
+/** The resting Copy label, named for what the current mode actually copies. */
+const copyLabelFor = (mode?: CaptureMode) =>
+  mode === 'formula' ? 'Copy LaTeX' : mode === 'table' ? 'Copy Markdown' : 'Copy text'
 
 copyBtn.addEventListener('click', async () => {
   // Copy the source, not the rendered DOM: Markdown for documents, raw LaTeX for
@@ -394,7 +458,7 @@ copyBtn.addEventListener('click', async () => {
   icon.innerHTML = CHECK_ICON
   copyBtn.classList.add('is-done')
   setTimeout(() => {
-    label.textContent = 'Copy'
+    label.textContent = copyLabelFor(lastResult?.mode)
     icon.innerHTML = COPY_ICON
     copyBtn.classList.remove('is-done')
   }, 1300)
@@ -408,5 +472,5 @@ if (isMac) {
   if (modEl) modEl.textContent = '⌘'
 }
 
-setMode(false)
+void restorePrefs()
 setState('idle')
