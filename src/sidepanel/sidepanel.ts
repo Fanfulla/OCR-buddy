@@ -16,6 +16,7 @@ import {
   type OcrResult,
   type OcrStage,
   type PermissionGranted,
+  type Reprocess,
   type StartSelection,
 } from '../shared/messages'
 
@@ -38,23 +39,51 @@ const segProse = $<HTMLButtonElement>('seg-prose')
 const segCode = $<HTMLButtonElement>('seg-code')
 const copyBtn = $<HTMLButtonElement>('copy')
 const modeDesc = $('mode-desc')
-const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.mode-btn'))
+const idlePick = $('mode-pick-idle')
+const resultPick = $('mode-pick-result')
 let captureMode: CaptureMode = 'quick'
 const MODE_DESC: Record<CaptureMode, string> = {
-  quick: 'Quick OCR — code, prose, or any text.',
-  document: 'Document — a full page: columns, headings, tables & equations.',
+  quick: 'Text/Code — code, prose, or any text.',
   formula: 'Formula — one equation → LaTeX, rendered beside the crop to verify.',
   table: 'Table — one table → Markdown grid (works on borderless tables too).',
 }
-for (const btn of modeBtns) {
-  btn.addEventListener('click', () => {
-    captureMode = (btn.dataset.mode as CaptureMode) ?? 'quick'
-    for (const b of modeBtns) {
-      const on = b === btn
-      b.classList.toggle('is-active', on)
-      b.setAttribute('aria-checked', String(on))
-    }
+
+/** Highlight the button matching `mode` within a picker. */
+function syncPicker(pick: HTMLElement, mode: CaptureMode) {
+  for (const b of pick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
+    const on = b.dataset.mode === mode
+    b.classList.toggle('is-active', on)
+    b.setAttribute('aria-checked', String(on))
+  }
+}
+
+// Idle picker: choose the mode for the NEXT capture.
+for (const b of idlePick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
+  b.addEventListener('click', () => {
+    captureMode = (b.dataset.mode as CaptureMode) ?? 'quick'
+    syncPicker(idlePick, captureMode)
     modeDesc.textContent = MODE_DESC[captureMode]
+  })
+}
+
+// Result picker: reinterpret the CURRENT crop in another mode — no re-selection.
+for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
+  b.addEventListener('click', () => {
+    const mode = (b.dataset.mode as CaptureMode) ?? 'quick'
+    if (!lastResult || mode === lastResult.mode) return
+    captureMode = mode
+    syncPicker(resultPick, mode)
+    chrome.runtime.sendMessage({
+      type: 'REPROCESS',
+      imageDataUrl: lastResult.imageDataUrl,
+      mode,
+    } satisfies Reprocess)
+    busyLabel.textContent = 'Re-reading region…'
+    progressFill.style.width = '40%'
+    spinnerEl.hidden = false
+    selectingNote.hidden = true
+    busySkeleton.hidden = false
+    setState('busy')
   })
 }
 
@@ -198,8 +227,9 @@ function renderResult(r: OcrResult) {
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
-  // Only quick mode has the Prose/Code split; document & formula don't.
+  // Only quick mode has the Prose/Code split; formula & table don't.
   seg.hidden = r.mode !== 'quick'
+  syncPicker(resultPick, r.mode)
   renderText()
   setState('result')
 }
@@ -210,7 +240,7 @@ function renderText() {
   if (!lastResult) return
   textEl.replaceChildren()
 
-  if (lastResult.mode === 'document' || lastResult.mode === 'table') {
+  if (lastResult.mode === 'table') {
     textEl.classList.remove('hljs')
     textEl.classList.add('doc')
     textEl.contentEditable = 'false'
@@ -268,37 +298,18 @@ function renderText() {
   }
 }
 
-/** Render document-mode blocks: text-like blocks as semantic elements, tables as
- *  real tables, and each equation as KaTeX shown BESIDE its source crop so the
- *  user can verify the transcription. KaTeX render failure → abstain to the image
- *  (we never present invented LaTeX as if it were read). */
+/** Render Table-mode blocks: the reconstructed grid as a real table, or a plain
+ *  paragraph when the crop wasn't grid-like. */
 function renderDocBlocks(blocks: DocBlock[]) {
   const frag = document.createDocumentFragment()
   for (const b of blocks) {
-    if (b.kind === 'heading') {
-      const h = document.createElement('h2')
-      h.className = 'doc-h'
-      h.textContent = b.text
-      frag.appendChild(h)
-    } else if (b.kind === 'caption') {
-      const c = document.createElement('p')
-      c.className = 'doc-cap'
-      c.textContent = b.text
-      frag.appendChild(c)
-    } else if (b.kind === 'paragraph') {
+    if (b.kind === 'table') {
+      frag.appendChild(renderMarkdownTable(b.markdown))
+    } else {
       const p = document.createElement('p')
       p.className = 'doc-p'
       p.textContent = b.text
       frag.appendChild(p)
-    } else if (b.kind === 'figure') {
-      const f = document.createElement('div')
-      f.className = 'doc-placeholder'
-      f.textContent = 'Figure'
-      frag.appendChild(f)
-    } else if (b.kind === 'table') {
-      frag.appendChild(renderMarkdownTable(b.markdown))
-    } else if (b.kind === 'equation') {
-      frag.appendChild(renderEquation(b))
     }
   }
   textEl.replaceChildren(frag)
@@ -323,43 +334,6 @@ function renderMarkdownTable(markdown: string): HTMLElement {
     table.appendChild(tr)
   })
   return table
-}
-
-function renderEquation(b: Extract<DocBlock, { kind: 'equation' }>): HTMLElement {
-  const fig = document.createElement('figure')
-  fig.className = 'doc-eq'
-
-  let rendered: string | null = null
-  if (b.ok && b.latex) {
-    try {
-      rendered = katex.renderToString(b.latex, { displayMode: true, throwOnError: true })
-    } catch {
-      rendered = null // unparseable LaTeX → abstain to the image
-    }
-  }
-
-  const crop = document.createElement('img')
-  crop.className = 'doc-eq-crop'
-  crop.src = b.cropDataUrl
-  crop.alt = 'source equation'
-
-  const hint = document.createElement('figcaption')
-  hint.className = 'doc-eq-hint'
-
-  if (rendered) {
-    const out = document.createElement('div')
-    out.className = 'doc-eq-render'
-    out.innerHTML = rendered // KaTeX output is sanitized HTML
-    fig.append(out, crop)
-    hint.textContent = 'Rendered from the source above — verify they match.'
-    fig.dataset.ok = 'true'
-  } else {
-    fig.append(crop)
-    hint.textContent = 'Could not transcribe — shown as image (nothing invented).'
-    fig.dataset.ok = 'false'
-  }
-  fig.appendChild(hint)
-  return fig
 }
 
 /** Formula mode: render the LaTeX with KaTeX in the text area; the source crop is
@@ -408,7 +382,7 @@ copyBtn.addEventListener('click', async () => {
   // Copy the source, not the rendered DOM: Markdown for documents, raw LaTeX for
   // formulas, plain text otherwise.
   const payload =
-    lastResult?.mode === 'document' || lastResult?.mode === 'table'
+    lastResult?.mode === 'table'
       ? (lastResult.docText ?? '')
       : lastResult?.mode === 'formula'
         ? (lastResult.latex ?? '')

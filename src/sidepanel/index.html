@@ -54,11 +54,10 @@
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
-      <div class="mode-pick" role="radiogroup" aria-label="Capture mode">
-        <button id="mode-quick" class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text</button>
-        <button id="mode-document" class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="document">Document</button>
-        <button id="mode-formula" class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
-        <button id="mode-table" class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="table">Table</button>
+      <div id="mode-pick-idle" class="mode-pick" role="radiogroup" aria-label="Capture mode">
+        <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text/Code</button>
+        <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
+        <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="table">Table</button>
       </div>
       <p id="mode-desc" class="mode-desc">Quick OCR — code, prose, or any text.</p>
     </section>
@@ -107,6 +106,16 @@
             <img id="crop" alt="captured region" />
           </div>
         </figure>
+      </div>
+
+      <!-- Reinterpret the SAME crop in another mode — no need to re-select. -->
+      <div class="reinterpret">
+        <span class="section-label">Read as</span>
+        <div id="mode-pick-result" class="mode-pick" role="radiogroup" aria-label="Reinterpret as">
+          <button class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text/Code</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
+          <button class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="table">Table</button>
+        </div>
       </div>
 
       <div class="text-head">

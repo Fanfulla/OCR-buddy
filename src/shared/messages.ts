@@ -12,9 +12,8 @@ export interface Rect {
   height: number
 }
 
-/** Capture modes: quick OCR, full-page document layout, a single formula → LaTeX,
- *  or a single table → Markdown. */
-export type CaptureMode = 'quick' | 'document' | 'formula' | 'table'
+/** Capture modes: quick OCR, a single formula → LaTeX, or a single table → Markdown. */
+export type CaptureMode = 'quick' | 'formula' | 'table'
 
 /** Panel → SW: user pressed "Select region"; begin a capture on the active tab. */
 export interface StartSelection {
@@ -46,6 +45,14 @@ export interface NeedPermission {
 /** Panel → SW: the user granted the per-site permission; retry the capture. */
 export interface PermissionGranted {
   type: 'PERMISSION_GRANTED'
+}
+
+/** Panel → SW: re-run a DIFFERENT mode on the already-captured crop (no re-select).
+ *  Lets the user reinterpret the same region as text / document / formula / table. */
+export interface Reprocess {
+  type: 'REPROCESS'
+  imageDataUrl: string
+  mode: CaptureMode
 }
 
 /** SW → offscreen/worker: run OCR on this cropped image. */
@@ -89,28 +96,24 @@ export interface OcrWord {
   line: number
 }
 
-/** One rendered block of a document-mode result, in reading order. Text-like
- *  blocks carry plain text; equations carry LaTeX + the exact source crop fed to
- *  the model, so the panel can render KaTeX beside it (the anti-hallucination
- *  check) and abstain to the image when `ok` is false. */
+/** A rendered block of a Table-mode result: the reconstructed grid as Markdown,
+ *  or a plain-text fallback when the crop isn't grid-like. */
 export type DocBlock =
-  | { kind: 'heading' | 'paragraph' | 'caption'; text: string }
+  | { kind: 'paragraph'; text: string }
   | { kind: 'table'; markdown: string }
-  | { kind: 'figure' }
-  | { kind: 'equation'; latex: string; cropDataUrl: string; ok: boolean }
 
 /** Final result. */
 export interface OcrResult {
   type: 'OCR_RESULT'
-  /** 'document' carries docText/docBlocks; 'formula' carries latex; 'quick' text/code/words. */
+  /** 'table' carries docText/docBlocks; 'formula' carries latex; 'quick' text/code/words. */
   mode: CaptureMode
   /** Prose text: lines joined naturally (reading order). */
   text: string
   /** Code view: line breaks + indentation reconstructed from box geometry. */
   codeText: string
-  /** Document mode: assembled Markdown of the page (layout-driven) — for Copy. */
+  /** Table mode: the reconstructed grid as Markdown — for Copy. */
   docText?: string
-  /** Document mode: structured blocks in reading order, for rich rendering. */
+  /** Table mode: structured block(s) for rich rendering (grid, or text fallback). */
   docBlocks?: DocBlock[]
   /** Formula mode: the recognized LaTeX. */
   latex?: string
@@ -131,6 +134,7 @@ export type Message =
   | CaptureRequest
   | NeedPermission
   | PermissionGranted
+  | Reprocess
   | RunOcr
   | OcrStatus
   | OcrResult

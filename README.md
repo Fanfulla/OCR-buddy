@@ -79,18 +79,13 @@ Implemented since: **smart upscaling** of small crops (low-res video lever) and 
 **code view** that reconstructs indentation from box geometry (toggle in the panel,
 default off). Both checked by `npm run verify`.
 
-Three **capture modes** (picker at idle):
+Three focused **capture modes** (picker at idle, and a "Read as" switcher in the
+result view that reinterprets the same crop without re-selecting):
 
-- **Text** — quick OCR of any region (the default).
-- **Document** — layout analysis (PicoDet CDLA, Apache-2.0) assembles a full,
-  multi-element *page* in reading order: titles, columns, captions, tables, and
-  equations *in context*. This is where the layout model works — single tight
-  crops of one element are misclassified, which is why the next two modes exist.
-- **Formula** — a single equation → LaTeX (the page-layout model can't tag a
-  standalone crop as an equation).
+- **Text/Code** — OCR any region (code, prose, or any text); the default.
+- **Formula** — a single equation → LaTeX.
 - **Table** — a single table → Markdown grid, reconstructed by pure geometry from
-  column alignment, so **borderless tables** work (the layout model reads those as
-  figures).
+  column alignment, so **borderless tables** work too.
 
 The equation model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr),
 MIT) is the one autoregressive piece in the stack. It's accurate on clean formulas

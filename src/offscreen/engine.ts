@@ -9,7 +9,6 @@
 import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
 import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
-import { detectLayout, type LayoutLabel, type Region } from './layout'
 import { recognizeFormula } from './formula'
 import type { DocBlock, OcrWord } from '../shared/messages'
 
@@ -278,47 +277,7 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   }
 }
 
-// ── Document mode: layout analysis → per-region OCR → structured Markdown ─────
-
-type RegionKind = 'title' | 'paragraph' | 'caption' | 'table' | 'figure' | 'equation' | 'skip'
-function classifyRegion(label: LayoutLabel): RegionKind {
-  switch (label) {
-    case 'Title':
-      return 'title'
-    case 'Text':
-    case 'Reference':
-      return 'paragraph'
-    case 'Figure caption':
-    case 'Table caption':
-      return 'caption'
-    case 'Table':
-      return 'table'
-    case 'Figure':
-      return 'figure'
-    case 'Equation':
-      return 'equation'
-    default:
-      return 'skip' // Header / Footer
-  }
-}
-
-/** Reading order: column-major (full-width regions read with the left column),
- * each column top-to-bottom. Good enough for 1–2 column papers. */
-function orderRegions(regions: Region[], pageW: number): Region[] {
-  const mid = pageW * 0.5
-  const band = (r: Region) =>
-    r.box.width > 0.55 * pageW ? 0 : r.box.x + r.box.width / 2 < mid ? 0 : 1
-  return [...regions].sort((a, b) => band(a) - band(b) || a.box.y - b.box.y)
-}
-
-async function cropToBuffer(bitmap: ImageBitmap, box: Region['box']): Promise<ArrayBuffer> {
-  const w = Math.max(1, Math.round(box.width))
-  const h = Math.max(1, Math.round(box.height))
-  const canvas = new OffscreenCanvas(w, h)
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(bitmap, box.x, box.y, box.width, box.height, 0, 0, w, h)
-  return (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()
-}
+// ── Table mode: OCR the crop, then rebuild a grid from word-box geometry ──────
 
 /**
  * Reconstruct a Markdown table from a table region's OCR word boxes: cluster into
@@ -409,80 +368,6 @@ function reconstructTable(words: OcrWord[]): string | null {
     ...grid.slice(1).map((r) => `| ${r.map(esc).join(' | ')} |`),
   ]
   return md.join('\n')
-}
-
-export interface DocOutput {
-  docText: string
-  docBlocks: DocBlock[]
-  backend: 'webgpu' | 'wasm'
-  empty: boolean
-}
-
-const blobToDataUrl = (buf: ArrayBuffer): Promise<string> =>
-  new Promise((resolve) => {
-    const fr = new FileReader()
-    fr.onload = () => resolve(fr.result as string)
-    fr.readAsDataURL(new Blob([buf], { type: 'image/png' }))
-  })
-
-/** Run layout detection, then handle each region in reading order: text-like
- * regions → OCR; tables → geometry-reconstructed grid; equations → LaTeX (with
- * the source crop kept for the panel's KaTeX-vs-crop check). Returns both rich
- * blocks (for rendering) and assembled Markdown (for Copy). */
-export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOutput> {
-  const bitmap = await createImageBitmap(new Blob([imageBuffer]))
-  const regions = await detectLayout(bitmap)
-  const ordered = orderRegions(regions, bitmap.width)
-
-  const blocks: DocBlock[] = []
-  const md: string[] = []
-  for (const r of ordered) {
-    const kind = classifyRegion(r.label)
-    if (kind === 'skip') continue
-    if (kind === 'table') {
-      const tbl = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
-      const grid = reconstructTable(tbl.words)
-      if (grid) {
-        blocks.push({ kind: 'table', markdown: grid })
-        md.push(grid)
-      } else {
-        blocks.push({ kind: 'paragraph', text: '[ Table — could not reconstruct structure ]' })
-        md.push('> **[ Table ]** — could not reconstruct structure')
-      }
-      continue
-    }
-    if (kind === 'equation') {
-      const buf = await cropToBuffer(bitmap, r.box)
-      const crop = await createImageBitmap(new Blob([buf]))
-      const { latex, ok } = await recognizeFormula(crop)
-      crop.close()
-      const cropDataUrl = await blobToDataUrl(buf)
-      blocks.push({ kind: 'equation', latex, cropDataUrl, ok })
-      md.push(ok && latex ? `$$\n${latex}\n$$` : '> **[ Equation ]** — shown as image (not transcribed)')
-      continue
-    }
-    if (kind === 'figure') {
-      blocks.push({ kind: 'figure' })
-      md.push('> **[ Figure ]**')
-      continue
-    }
-    // Text-like region → OCR its crop independently (no cross-column merging).
-    const out = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
-    const text = out.text.trim().replace(/\n/g, ' ')
-    if (!text) continue
-    if (kind === 'title') {
-      blocks.push({ kind: 'heading', text })
-      md.push(`## ${text}`)
-    } else if (kind === 'caption') {
-      blocks.push({ kind: 'caption', text })
-      md.push(`*${text}*`)
-    } else {
-      blocks.push({ kind: 'paragraph', text })
-      md.push(text)
-    }
-  }
-  bitmap.close()
-  return { docText: md.join('\n\n'), docBlocks: blocks, backend, empty: blocks.length === 0 }
 }
 
 /** Table mode: OCR the whole crop and rebuild the grid by geometry — no layout

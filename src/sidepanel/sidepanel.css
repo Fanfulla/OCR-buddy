@@ -186,6 +186,25 @@ header {
   min-height: 16px;
 }
 
+/* "Read as" — reinterpret the captured crop in another mode, in the result view. */
+.reinterpret {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 14px;
+}
+.reinterpret .section-label {
+  flex: none;
+}
+.reinterpret .mode-pick {
+  margin-top: 0;
+  flex: 1;
+}
+.reinterpret .mode-btn {
+  flex: 1;
+  padding: 5px 8px;
+}
+
 /* `display:flex` on .seg would otherwise defeat [hidden]. */
 .seg[hidden] {
   display: none;

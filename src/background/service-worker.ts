@@ -38,6 +38,10 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     void startActiveTabSelection()
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
+  } else if (msg.type === 'REPROCESS') {
+    // Reinterpret an already-captured crop in a different mode — no re-selection.
+    captureMode = msg.mode
+    void reprocess(msg.imageDataUrl, msg.mode)
   } else if (msg.type === 'PERMISSION_GRANTED') {
     // The MV3 service worker can be recycled while the permission prompt is open,
     // dropping in-memory `pending` — which left "Allow" doing nothing. Fall back to
@@ -99,6 +103,12 @@ async function originOf(tabId: number): Promise<string> {
   } catch {
     return ''
   }
+}
+
+/** Re-run OCR on a crop we already captured, in a new mode (no screenshot). */
+async function reprocess(imageDataUrl: string, mode: CaptureMode): Promise<void> {
+  await ensureOffscreen()
+  await chrome.runtime.sendMessage({ type: 'RUN_OCR', imageDataUrl, langs: V1_LANGS, mode } satisfies RunOcr)
 }
 
 async function handleCapture(req: CaptureRequest): Promise<void> {
