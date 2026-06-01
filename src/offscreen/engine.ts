@@ -484,3 +484,15 @@ export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOu
   bitmap.close()
   return { docText: md.join('\n\n'), docBlocks: blocks, backend, empty: blocks.length === 0 }
 }
+
+/** Formula mode: recognize one captured equation crop as LaTeX. */
+export async function recognizeFormulaImage(
+  imageBuffer: ArrayBuffer,
+): Promise<{ latex: string; ok: boolean; backend: 'webgpu' | 'wasm' }> {
+  // No PP-OCR service runs in this path, so resolve the backend label directly.
+  backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
+  const bitmap = await createImageBitmap(new Blob([imageBuffer]))
+  const r = await recognizeFormula(bitmap)
+  bitmap.close()
+  return { ...r, backend }
+}

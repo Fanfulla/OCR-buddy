@@ -12,11 +12,15 @@ export interface Rect {
   height: number
 }
 
+/** The three capture modes: quick OCR, full-page document layout, or a single
+ *  formula → LaTeX. */
+export type CaptureMode = 'quick' | 'document' | 'formula'
+
 /** Panel → SW: user pressed "Select region"; begin a capture on the active tab. */
 export interface StartSelection {
   type: 'START_SELECTION'
-  /** Document mode: run layout analysis + structured assembly instead of quick OCR. */
-  document?: boolean
+  /** Which pipeline to run on the captured region (default 'quick'). */
+  mode?: CaptureMode
 }
 
 /** SW → content overlay: show the selection overlay on the page. */
@@ -51,8 +55,8 @@ export interface RunOcr {
   imageDataUrl: string
   /** v1 language scope. */
   langs: string[]
-  /** 'document' runs layout analysis + structured assembly; default quick OCR. */
-  mode?: 'quick' | 'document'
+  /** Which pipeline to run; default quick OCR. */
+  mode?: CaptureMode
 }
 
 export type OcrStage =
@@ -98,8 +102,8 @@ export type DocBlock =
 /** Final result. */
 export interface OcrResult {
   type: 'OCR_RESULT'
-  /** 'document' results carry a Markdown `docText`; 'quick' carry text/code/words. */
-  mode: 'quick' | 'document'
+  /** 'document' carries docText/docBlocks; 'formula' carries latex; 'quick' text/code/words. */
+  mode: CaptureMode
   /** Prose text: lines joined naturally (reading order). */
   text: string
   /** Code view: line breaks + indentation reconstructed from box geometry. */
@@ -108,6 +112,10 @@ export interface OcrResult {
   docText?: string
   /** Document mode: structured blocks in reading order, for rich rendering. */
   docBlocks?: DocBlock[]
+  /** Formula mode: the recognized LaTeX. */
+  latex?: string
+  /** Formula mode: false = degenerate/empty decode → panel abstains to the crop. */
+  latexOk?: boolean
   words: OcrWord[]
   /** Which backend actually ran. */
   backend: 'webgpu' | 'wasm'

@@ -54,10 +54,12 @@
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
-      <label class="doc-toggle">
-        <input id="doc-mode" type="checkbox" />
-        <span>Document mode <small>— layout, columns &amp; tables</small></span>
-      </label>
+      <div class="mode-pick" role="radiogroup" aria-label="Capture mode">
+        <button id="mode-quick" class="mode-btn is-active" type="button" role="radio" aria-checked="true" data-mode="quick">Text</button>
+        <button id="mode-document" class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="document">Document</button>
+        <button id="mode-formula" class="mode-btn" type="button" role="radio" aria-checked="false" data-mode="formula">Formula</button>
+      </div>
+      <p id="mode-desc" class="mode-desc">Quick OCR — code, prose, or any text.</p>
     </section>
 
     <!-- BUSY -->

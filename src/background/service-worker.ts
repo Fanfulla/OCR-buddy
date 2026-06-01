@@ -5,7 +5,7 @@
 //   3. Receive the selected rect → captureVisibleTab → crop on OffscreenCanvas.
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
-import type { CaptureRequest, Message, RunOcr, ShowOverlay } from '../shared/messages'
+import type { CaptureMode, CaptureRequest, Message, RunOcr, ShowOverlay } from '../shared/messages'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 const V1_LANGS = ['en', 'it', 'fr', 'de', 'es'] // Latin + IT/EU (research §v1)
@@ -29,18 +29,23 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 type Pending = { kind: 'select'; tabId: number } | { kind: 'capture'; req: CaptureRequest }
 let pending: Pending | null = null
 
-// Capture mode chosen at selection time (quick OCR vs document layout analysis).
-let captureMode: 'quick' | 'document' = 'quick'
+// Capture mode chosen at selection time (quick OCR / document layout / formula).
+let captureMode: CaptureMode = 'quick'
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   if (msg.type === 'START_SELECTION') {
-    captureMode = msg.document ? 'document' : 'quick'
+    captureMode = msg.mode ?? 'quick'
     void startActiveTabSelection()
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
   } else if (msg.type === 'PERMISSION_GRANTED') {
+    // The MV3 service worker can be recycled while the permission prompt is open,
+    // dropping in-memory `pending` — which left "Allow" doing nothing. Fall back to
+    // a fresh selection on the active tab (now that host access is granted) so the
+    // grant always leads somewhere.
     if (pending?.kind === 'capture') void handleCapture(pending.req)
     else if (pending?.kind === 'select') void startSelection(pending.tabId)
+    else void startActiveTabSelection()
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
   // via broadcast — no relay needed here.

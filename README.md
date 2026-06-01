@@ -79,14 +79,22 @@ Implemented since: **smart upscaling** of small crops (low-res video lever) and 
 **code view** that reconstructs indentation from box geometry (toggle in the panel,
 default off). Both checked by `npm run verify`.
 
-**Document mode** (toggle at idle) runs layout analysis (PicoDet CDLA, Apache-2.0)
-and assembles a structured page in reading order: titles, columns, captions,
-**tables → Markdown** (pure geometry), and **equations → LaTeX**. The equation
-model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr), MIT) is the
-one autoregressive piece in the stack, so the panel renders its LaTeX with **KaTeX
-beside the source crop** for a visual faithfulness check — and abstains to the
-image (never invents) when it can't render. Output copies as Markdown (with
-`$$…$$`). See `public/models/SOURCE.md` for model provenance.
+Three **capture modes** (picker at idle):
+
+- **Text** — quick OCR of any region (the default).
+- **Document** — layout analysis (PicoDet CDLA, Apache-2.0) assembles a structured
+  page in reading order: titles, columns, captions, and **tables → Markdown** (pure
+  geometry). Equation regions detected in a full page are transcribed too.
+- **Formula** — a single equation → LaTeX, for when you capture one formula on its
+  own (the page-layout model can't tag a standalone crop as an equation).
+
+The equation model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr),
+MIT) is the one autoregressive piece in the stack. It's accurate on clean formulas
+but can misread dense or low-resolution ones, so the panel renders its LaTeX with
+**KaTeX beside the source crop** for a visual faithfulness check — and abstains to
+the image (never invents) when it can't render or the decode degenerates. Documents
+copy as Markdown (with `$$…$$`); formulas copy as raw LaTeX. See
+`public/models/SOURCE.md` for model provenance.
 
 Deferred: an optional ML super-resolution model; richer intra-line spacing; moving
 inference to a dedicated worker. **Future (remote):** fine-tuning the bundled

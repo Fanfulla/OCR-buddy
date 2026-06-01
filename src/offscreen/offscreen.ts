@@ -2,7 +2,7 @@
 // cross-origin isolated (COOP/COEP) and WebGPU-capable, so we run the engine
 // (ppu-paddle-ocr / PP-OCRv5) here directly — no separate worker for v1.
 
-import { recognizeBuffer, recognizeDocument } from './engine'
+import { recognizeBuffer, recognizeDocument, recognizeFormulaImage } from './engine'
 import type { Message, OcrResult, OcrStatus, RunOcr } from '../shared/messages'
 
 if (!crossOriginIsolated) {
@@ -33,6 +33,25 @@ async function run(req: RunOcr): Promise<void> {
         backend: out.backend,
         imageDataUrl: req.imageDataUrl,
         empty: out.empty,
+      })
+      return
+    }
+
+    if (req.mode === 'formula') {
+      post({ type: 'OCR_STATUS', stage: 'recognizing' })
+      const f = await recognizeFormulaImage(imageBuffer)
+      post({ type: 'OCR_STATUS', stage: 'done' })
+      post({
+        type: 'OCR_RESULT',
+        mode: 'formula',
+        text: f.latex,
+        codeText: f.latex,
+        latex: f.latex,
+        latexOk: f.ok,
+        words: [],
+        backend: f.backend,
+        imageDataUrl: req.imageDataUrl,
+        empty: !f.ok && !f.latex,
       })
       return
     }

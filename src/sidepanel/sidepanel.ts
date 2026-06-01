@@ -10,6 +10,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import {
   LOW_CONFIDENCE,
+  type CaptureMode,
   type DocBlock,
   type Message,
   type OcrResult,
@@ -36,7 +37,25 @@ const seg = document.querySelector<HTMLElement>('.seg')!
 const segProse = $<HTMLButtonElement>('seg-prose')
 const segCode = $<HTMLButtonElement>('seg-code')
 const copyBtn = $<HTMLButtonElement>('copy')
-const docModeEl = $<HTMLInputElement>('doc-mode')
+const modeDesc = $('mode-desc')
+const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.mode-btn'))
+let captureMode: CaptureMode = 'quick'
+const MODE_DESC: Record<CaptureMode, string> = {
+  quick: 'Quick OCR — code, prose, or any text.',
+  document: 'Document — layout, columns, tables & equations.',
+  formula: 'Formula — one equation → LaTeX, rendered beside the crop to verify.',
+}
+for (const btn of modeBtns) {
+  btn.addEventListener('click', () => {
+    captureMode = (btn.dataset.mode as CaptureMode) ?? 'quick'
+    for (const b of modeBtns) {
+      const on = b === btn
+      b.classList.toggle('is-active', on)
+      b.setAttribute('aria-checked', String(on))
+    }
+    modeDesc.textContent = MODE_DESC[captureMode]
+  })
+}
 
 type State = 'idle' | 'busy' | 'result' | 'error' | 'permission'
 const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission']
@@ -84,7 +103,7 @@ function showStage(stage: Exclude<OcrStage, 'error'>, progress?: number) {
 }
 
 function startSelection() {
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', document: docModeEl.checked } satisfies StartSelection)
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', mode: captureMode } satisfies StartSelection)
   busyLabel.textContent = 'Starting…'
   progressFill.style.width = '8%'
   spinnerEl.hidden = false
@@ -164,8 +183,8 @@ function renderResult(r: OcrResult) {
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
-  // Document mode has no Prose/Code split — it's an assembled Markdown page.
-  seg.hidden = r.mode === 'document'
+  // Only quick mode has the Prose/Code split; document & formula don't.
+  seg.hidden = r.mode !== 'quick'
   renderText()
   setState('result')
 }
@@ -181,6 +200,15 @@ function renderText() {
     textEl.classList.add('doc')
     textEl.contentEditable = 'false'
     renderDocBlocks(lastResult.docBlocks ?? [])
+    uncertainSummary.hidden = true
+    return
+  }
+
+  if (lastResult.mode === 'formula') {
+    textEl.classList.remove('hljs')
+    textEl.classList.add('doc')
+    textEl.contentEditable = 'false'
+    renderFormula(lastResult.latex ?? '', lastResult.latexOk ?? false)
     uncertainSummary.hidden = true
     return
   }
@@ -319,6 +347,33 @@ function renderEquation(b: Extract<DocBlock, { kind: 'equation' }>): HTMLElement
   return fig
 }
 
+/** Formula mode: render the LaTeX with KaTeX in the text area; the source crop is
+ *  already shown above (Source · captured region), giving the side-by-side check.
+ *  Render failure or a degenerate decode → abstain (the crop above is the answer). */
+function renderFormula(latex: string, ok: boolean) {
+  textEl.replaceChildren()
+  let html: string | null = null
+  if (ok && latex) {
+    try {
+      html = katex.renderToString(latex, { displayMode: true, throwOnError: true })
+    } catch {
+      html = null
+    }
+  }
+  const hint = document.createElement('p')
+  hint.className = 'doc-eq-hint'
+  if (html) {
+    const out = document.createElement('div')
+    out.className = 'doc-eq-render'
+    out.innerHTML = html // KaTeX output is sanitized HTML
+    hint.textContent = 'Rendered from the source above — verify it matches before trusting it.'
+    textEl.append(out, hint)
+  } else {
+    hint.textContent = 'Could not transcribe this formula — use the source image above (nothing invented).'
+    textEl.append(hint)
+  }
+}
+
 function setMode(code: boolean) {
   codeMode = code
   seg.dataset.mode = code ? 'code' : 'prose'
@@ -335,9 +390,14 @@ const COPY_ICON = '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path 
 const CHECK_ICON = '<polyline points="20 6 9 17 4 12"></polyline>'
 
 copyBtn.addEventListener('click', async () => {
-  // Document mode: copy the assembled Markdown (with $$LaTeX$$), not the rendered DOM.
+  // Copy the source, not the rendered DOM: Markdown for documents, raw LaTeX for
+  // formulas, plain text otherwise.
   const payload =
-    lastResult?.mode === 'document' ? (lastResult.docText ?? '') : (textEl.textContent ?? '')
+    lastResult?.mode === 'document'
+      ? (lastResult.docText ?? '')
+      : lastResult?.mode === 'formula'
+        ? (lastResult.latex ?? '')
+        : (textEl.textContent ?? '')
   await navigator.clipboard.writeText(payload)
   const label = copyBtn.querySelector('.copy-label')!
   const icon = copyBtn.querySelector('.ic-copy')!

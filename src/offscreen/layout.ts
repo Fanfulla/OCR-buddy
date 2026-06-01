@@ -115,20 +115,35 @@ export async function detectLayout(bitmap: ImageBitmap): Promise<Region[]> {
     }
   }
 
+  // Global (cross-class) NMS + containment suppression. The model emits several
+  // class hypotheses for one physical region (e.g. a tight table crop fires Table,
+  // Figure AND Figure-caption over the same area); per-class NMS alone would keep
+  // all of them. Sort every detection by score and greedily keep a box only if it
+  // neither overlaps (IOU) nor sits mostly inside an already-kept box — so each
+  // region resolves to its single highest-scoring label.
+  const contained = (inner: number[], outer: number[]): number => {
+    const x1 = Math.max(inner[0], outer[0]), y1 = Math.max(inner[1], outer[1])
+    const x2 = Math.min(inner[2], outer[2]), y2 = Math.min(inner[3], outer[3])
+    const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1)
+    const a = (inner[2] - inner[0]) * (inner[3] - inner[1])
+    return a > 0 ? i / a : 0
+  }
+  const all = perClass
+    .flatMap((arr, c) => arr.map((d) => ({ ...d, c })))
+    .sort((a, b) => b.score - a.score)
+  const kept: { box: number[]; score: number; c: number }[] = []
+  for (const d of all) {
+    if (kept.some((k) => iouOf(k.box, d.box) > IOU || contained(d.box, k.box) > 0.7)) continue
+    kept.push(d)
+  }
+
   const sx = IW / ow
   const sy = IH / oh
-  const regions: Region[] = []
-  for (let c = 0; c < NUMC; c++) {
-    const arr = perClass[c].sort((a, b) => b.score - a.score)
-    const keep: typeof arr = []
-    for (const d of arr) if (keep.every((k) => iouOf(k.box, d.box) <= IOU)) keep.push(d)
-    for (const d of keep) {
-      const x1 = Math.max(0, Math.min(ow, d.box[0] / sx))
-      const y1 = Math.max(0, Math.min(oh, d.box[1] / sy))
-      const x2 = Math.max(0, Math.min(ow, d.box[2] / sx))
-      const y2 = Math.max(0, Math.min(oh, d.box[3] / sy))
-      regions.push({ label: LABELS[c], score: d.score, box: { x: x1, y: y1, width: x2 - x1, height: y2 - y1 } })
-    }
-  }
-  return regions
+  return kept.map((d) => {
+    const x1 = Math.max(0, Math.min(ow, d.box[0] / sx))
+    const y1 = Math.max(0, Math.min(oh, d.box[1] / sy))
+    const x2 = Math.max(0, Math.min(ow, d.box[2] / sx))
+    const y2 = Math.max(0, Math.min(oh, d.box[3] / sy))
+    return { label: LABELS[d.c], score: d.score, box: { x: x1, y: y1, width: x2 - x1, height: y2 - y1 } }
+  })
 }
