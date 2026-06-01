@@ -10,5 +10,8 @@ scripts/ocr-bench/img/
 scripts/ocr-bench/cases.json
 .layout-probe/
 .mfr-probe/
+# Test images may be large / copyrighted / contain personal data — keep only the README.
+test-images/*
+!test-images/README.md
 CLAUDE.md
 research/
