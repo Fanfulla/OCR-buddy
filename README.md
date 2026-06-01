@@ -1,112 +1,243 @@
 # OCR Buddy
 
-A Chrome extension (Manifest V3) that does **faithful, fully-local OCR**. Select a
-region on screen — code in a paused video, a document, a photo — and get the text,
-with **no server, no images leaving your machine, and no hallucinated text**.
+**Faithful, fully-local OCR for Chrome.** Select any region of your screen — code
+in a paused video, a paragraph in a PDF, a formula, a table — and get the text
+back. No server. No image ever leaves your machine. No hallucinated text.
 
-## Why it's different
+🌐 [ocr-buddy.com](https://ocr-buddy.com) · 🧩 Chrome extension (Manifest V3) ·
+🔓 Free & open source (MIT) · 🛡️ 100% local, privacy-first
 
-Most OCR tools today are large autoregressive vision-language models. They top the
-benchmarks but **invent fluent, plausible, wrong text** when the pixels are unclear —
-and they're too heavy to run in a browser. OCR Buddy deliberately uses the *classic*
-family — **detection + CTC recognition (PaddleOCR PP-OCRv5, Apache-2.0)** — which:
+---
 
-- transcribes glyphs that are actually present (fails to blanks/garbage, never fabricates),
-- runs **100% in-browser** via ONNX Runtime Web (WebGPU, WASM fallback),
-- exposes **per-word confidence** so uncertain output is flagged, not trusted silently.
+## Why this exists
 
-These choices come from a detailed evaluation of in-browser OCR runtimes, SOTA
-models, licenses, and accuracy/hallucination trade-offs as of mid-2026.
+Modern OCR is dominated by large autoregressive vision-language models. They top
+the benchmarks — and they **invent fluent, plausible, wrong text** the moment the
+pixels get unclear. For most uses that's an annoyance. For code, numbers, prices,
+IDs, or anything you intend to *trust*, a confidently-wrong transcription is worse
+than no transcription at all. Those models are also far too heavy to run in a
+browser tab.
 
-## Architecture
+OCR Buddy is built on the opposite bet: **faithfulness over fluency, and the whole
+pipeline on your device.** The interesting part is that those two goals don't fight
+— they point at the *same* engineering choices.
+
+### The thesis: classic OCR, not generative OCR
+
+Hallucination in OCR is largely **architectural**. A generative model predicts the
+*next likely token*, so when the image is ambiguous it falls back on its language
+prior and writes something that reads well but isn't there. The classic OCR family
+— **detection + CTC recognition** — has no such prior. It transcribes the glyphs
+that are actually present and, when it can't, it fails to blanks or low-confidence
+output. It never makes up a sentence.
+
+That family is also small, fast, and runs comfortably in WebAssembly/WebGPU. So:
+
+> **In-browser** and **no-hallucination** are not a tradeoff. Both constraints
+> select the same stack: PaddleOCR's **PP-OCRv5** (Apache-2.0) on **ONNX Runtime
+> Web**.
+
+Everything below follows from that one decision.
+
+---
+
+## How it works
 
 ```
-content overlay (drag-select)
-      │ rect + devicePixelRatio
+content overlay (drag-select a region)
+      │  rect + devicePixelRatio
       ▼
-service worker (coordinator)  ── captureVisibleTab → crop on OffscreenCanvas
-      │ cropped PNG
+service worker  (coordinator only — no DOM, no model, no inference)
+      │  captureVisibleTab → crop on an OffscreenCanvas → PNG data URL
       ▼
-offscreen document (cross-origin isolated, WebGPU-capable)
-      └─ ppu-paddle-ocr · PP-OCRv5 on ONNX Runtime Web  ── text + confidence
+offscreen document  (cross-origin isolated, WebGPU-capable, long-lived)
+      └─ PP-OCRv5 (+ pix2text-mfr for formulas) on ONNX Runtime Web
       ▼
-side panel (crop shown beside editable text; low-confidence words flagged)
+side panel  (crop shown beside the result; low-confidence words flagged)
 ```
 
-- **Service worker** = coordinator only (no DOM, no model, no inference).
-- **Offscreen document** = the long-lived host that runs the warm OCR engine.
-- **Capture** uses `chrome.tabs.captureVisibleTab` (taint-free even over cross-origin
-  video) — *not* `<video>`-frame grabbing, which the cross-origin canvas taint blocks.
+A few choices worth calling out, because each solved a concrete problem:
 
-## v1 scope
+- **The service worker only coordinates.** MV3 service workers are ephemeral and
+  have no DOM. The heavy, warm OCR engine lives in an **offscreen document** — a
+  real page I keep alive, made *cross-origin isolated* (COOP/COEP) so it can use
+  `SharedArrayBuffer` for multi-threaded WASM, with WebGPU as the primary backend.
+- **Capture uses `chrome.tabs.captureVisibleTab`, not `<video>` frame-grabbing.**
+  Grabbing a frame off a cross-origin video taints the canvas and the read fails.
+  `captureVisibleTab` returns clean, composited pixels — so OCR-ing code from a
+  paused YouTube video Just Works.
+- **Models are bundled, not downloaded.** They ship inside the extension, so the
+  tool is genuinely offline and nothing — not even a model fetch — touches the
+  network at runtime.
 
-- Languages: **Latin + Italian/EU** (abstains rather than transliterate-hallucinating on others).
-- **Super-resolution** preprocessing for low-res video frames.
-- Backend: **WebGPU primary, multi-threaded WASM fallback**.
-- Guardrails as the headline feature: confidence flags, empty output on blank regions.
+Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
 
-## Status
+---
 
-🟢 **Engine verified in a real MV3 extension.** The offscreen document hosts
-[`ppu-paddle-ocr`](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr)
-(PP-OCRv5, Apache-2.0) on ONNX Runtime Web, with the three model files bundled in
-`public/models/` (see `public/models/SOURCE.md`) and the ORT wasm self-hosted under
-`dist/ort/`. Build + typecheck green.
+## The three modes
 
-`npm run verify` loads the built extension in Chromium (Playwright) and runs the real
-engine on a bundled test image. Confirmed: `crossOriginIsolated === true`, **WebGPU**
-backend active, and faithful output — `"OCR Buddy 2026 const x = 42;"` extracted
-exactly (symbols and digits intact, nothing invented). The `src/testbed/` page is the
-harness it drives.
+You pick how a region should be read — and you can change your mind *after*
+capturing, with the **"Read as" switcher** in the result view, which re-runs a
+different mode on the same crop without re-selecting.
 
-Notes:
-- A tab open *before* the extension loads must be reloaded once for the selection
-  overlay to attach (the service worker shows a friendly message otherwise).
-- `npm run verify` must run headed (Playwright only loads extensions headed) and uses
-  bundled Chromium because an org-managed system Chrome may block `--load-extension`.
-- Size caveat: Vite also emits a hashed copy of the ~26 MB WebGPU wasm in `assets/`
-  (alongside `dist/ort/`). Harmless at runtime (`wasmPaths` points at `dist/ort/`);
-  trimming is a later optimization.
+### 🅣 Text/Code
 
-`npm run verify:ux` drives the **full capture→panel flow** in Chromium: serves a
-local page, fires the overlay, drag-selects with a real mouse, and reads the result
-from the side panel. Confirmed end-to-end (`"HELLO OCR 7"` round-tripped, WebGPU).
-Caveat: this test loads a copy of `dist/` with `host_permissions` added so
-`captureVisibleTab` is authorized without a toolbar click (Playwright can't click the
-browser action) — production keeps `activeTab`, granted by the real click.
+Plain OCR for code, prose, or any text. The journey here was mostly about
+**faithfully reconstructing layout from geometry**, because the recognizer only
+emits glyphs:
 
-Implemented since: **smart upscaling** of small crops (low-res video lever) and a
-**code view** that reconstructs indentation from box geometry (toggle in the panel,
-default off). Both checked by `npm run verify`.
+- The Latin recognizer's dictionary has **no space token** — so inter-word spacing
+  is reconstructed from the gaps between word boxes, and blank lines in code from
+  vertical gaps.
+- A **per-box** recognition strategy (each detected box on its own crop) keeps real
+  gaps intact; the default per-line strategy merged adjacent words ("you should" →
+  "youshould").
+- **Column-aware reading order** clusters boxes into columns by x-gaps and reads
+  column-major, so two-column papers don't come out interleaved.
+- A **Code view** rebuilds indentation from box geometry and syntax-highlights it.
+- A **homoglyph fold** maps stray Greek/Cyrillic look-alikes back to Latin, and a
+  tightly-scoped rule folds an `o` wedged between digits back to `0` (`4o0` → `400`)
+  — without touching code identifiers like `arg0` or octal `0o755`.
 
-Three focused **capture modes** (picker at idle, and a "Read as" switcher in the
-result view that reinterprets the same crop without re-selecting):
+### 🅕 Formula → LaTeX
 
-- **Text/Code** — OCR any region (code, prose, or any text); the default.
-- **Formula** — a single equation → LaTeX.
-- **Table** — a single table → Markdown grid, reconstructed by pure geometry from
-  column alignment, so **borderless tables** work too.
+The one place I *had* to use a generative model — there's no CTC equivalent that
+emits structured LaTeX. That reopens the hallucination risk the whole project
+avoids, so the design is built around containing it.
 
-The equation model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr),
-MIT) is the one autoregressive piece in the stack. It's accurate on clean formulas
-but can misread dense or low-resolution ones, so the panel renders its LaTeX with
-**KaTeX beside the source crop** for a visual faithfulness check — and abstains to
-the image (never invents) when it can't render or the decode degenerates. Documents
-copy as Markdown (with `$$…$$`); formulas copy as raw LaTeX. See
-`public/models/SOURCE.md` for model provenance.
+- Model: **[pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr)** (MIT, a
+  TrOCR-style vision encoder-decoder), bundled as a quantized ~23 MB encoder + 30 MB
+  decoder, lazy-loaded only when you actually use Formula mode.
+- I run it **directly on ONNX Runtime Web** (which the project already bundles)
+  rather than a higher-level library: that model's ONNX export has no merged
+  KV-cache decoder, which breaks the usual generation loop, so the greedy decode is
+  hand-rolled (feed the full sequence each step — O(n²), but a fraction of a second
+  per formula). The image preprocessing and the byte-level tokenizer decode were
+  validated against a reference implementation to floating-point precision before
+  shipping.
+- **The guardrail is visual, not statistical.** The predicted LaTeX is rendered
+  with **KaTeX right beside the source crop**, so a mismatch is obvious at a glance.
+  If KaTeX can't render the output, or the decode degenerates, OCR Buddy **abstains
+  and shows the crop as an image** — it never presents invented LaTeX as if it were
+  read.
+- **Honest limit:** this is a small local model. It's accurate on clean and
+  moderately complex formulas; it can misread dense, low-resolution ones. That's the
+  price of staying in-browser — and exactly why the render-beside-crop check exists.
 
-Deferred: an optional ML super-resolution model; richer intra-line spacing; moving
-inference to a dedicated worker. **Future (remote):** fine-tuning the bundled
-models on a curated set for a specific recurring failure mode (not v1).
+### 🅣 Table → Markdown
+
+A single table → a Markdown grid, reconstructed by **pure geometry** from the OCR
+word boxes: rows by vertical position, columns from an x-coverage profile, each
+word placed in its nearest column. No extra model. Because it keys off column
+*alignment* rather than ruled lines, it handles **borderless tables** — which a
+layout model reads as figures.
+
+---
+
+## What I tried and dropped
+
+The thought-flow wasn't a straight line. Two experiments shipped and were then
+removed, on purpose:
+
+- **A full "Document mode"** (whole-page layout analysis with a PicoDet CDLA model)
+  could parse a real paper into headings, columns, tables and equations in reading
+  order. But page-layout models need a *full page* of context: on a single tight
+  crop they misclassify — a standalone borderless table reads as a *Figure*, a
+  cropped paragraph block gets dropped. Since the tool is used by selecting one
+  region at a time, the mode was unreliable for how people actually reach for it.
+  I removed it (and its 7.4 MB model) and replaced it with the focused, reliable
+  single-region **Formula** and **Table** modes.
+- **A high-level inference library for the formula model.** Its generation loop
+  assumes a KV-cache decoder this model doesn't export, which silently corrupted the
+  output. It would also have bundled a *second* copy of the ONNX runtime. Hand-rolling
+  the decode on the runtime I already ship was both correct and lighter.
+
+Keeping these out is part of the design: a small, honest tool beats a broad,
+flaky one.
+
+---
+
+## Faithfulness, concretely
+
+Anti-hallucination isn't a tagline here, it's the feature set:
+
+- The **source crop is always shown beside the result**, so you can verify.
+- **Per-word confidence** is exposed; low-confidence words are flagged, not silently
+  trusted.
+- A blank or ambiguous region yields **empty output** — never invented filler.
+- Formulas are **rendered beside the crop** and **abstain to the image** when unsure.
+
+### Accuracy
+
+Measured with `scripts/ocr-image-test.mjs` (Node, the exact PP-OCRv5 config the
+extension uses) against ground truth on real academic pages:
+
+- A coherent **text block** (the normal "select a region" workflow) scores
+  **≈ 99.9–100/100** character accuracy. On clean prose it's effectively verbatim —
+  sentences, citations like `[22]`, tokens like `RoPE-2D`, all correct.
+- Capturing a paragraph **and an adjacent table together** drops the score — but
+  that's **reading-order** interleaving, not misrecognition; the characters are
+  right, the order isn't. Selecting one region (or using Table mode for the table)
+  restores it.
+- **Equations and tables aren't text** — use Formula and Table modes for those;
+  Text/Code mode flattens them.
+
+In short: on the content each mode is meant for, accuracy is essentially perfect.
+I don't claim "100% OCR of anything" — that would be the kind of overstatement the
+project is a reaction against.
+
+---
+
+## Privacy
+
+- **Nothing leaves your device.** No servers, no API calls, no telemetry. The only
+  network use is downloading the extension itself from the store.
+- **Models are bundled**, so even first-run inference is fully offline.
+- The selection overlay is passive and does not read page content; the screenshot
+  permission for a site is requested explicitly, per-site, only when needed.
+
+---
 
 ## Develop
 
 ```bash
 npm install
-npm run dev      # Vite + CRXJS, HMR
-# load the built dir in chrome://extensions (Developer mode → Load unpacked → dist/)
-npm run build
+npm run dev        # Vite + CRXJS with HMR
+npm run build      # production build → dist/
 npm run typecheck
+
+# load the unpacked extension:
+#   chrome://extensions → Developer mode → Load unpacked → select dist/
 ```
 
-Requires Chrome 124+ (WebGPU in workers).
+Testing:
+
+```bash
+npm run ocr-bench                  # synthetic OCR benchmark (Node/CPU)
+node scripts/ocr-image-test.mjs    # score real images in test-images/ vs ground truth
+npm run verify                     # load the built extension in Chromium (Playwright)
+```
+
+---
+
+## License
+
+OCR Buddy's own source code is **MIT** (see [`LICENSE`](LICENSE)).
+
+It bundles third-party models and libraries under their own permissive licenses —
+PaddleOCR / PP-OCRv5 (**Apache-2.0**), pix2text-mfr, ppu-paddle-ocr, ONNX Runtime
+and KaTeX (**MIT**), and highlight.js (**BSD-3-Clause**). All are compatible with
+redistribution in an MIT project; there is **no copyleft** anywhere in the stack.
+Full attribution and license texts are in
+[`public/THIRD_PARTY_LICENSES.md`](public/THIRD_PARTY_LICENSES.md), which ships with
+the packaged extension, and model provenance is in `public/models/SOURCE.md`.
+
+> The copyright holder in `LICENSE` is set to "OCR Buddy contributors" — change it
+> to your name or organization if you prefer.
+
+## Acknowledgements
+
+OCR Buddy stands on excellent open-source work: **PaddleOCR / PP-OCRv5** (Baidu /
+PaddlePaddle), **pix2text-mfr** (breezedeus), **ppu-paddle-ocr** (PT. Perkasa Pilar
+Utama), **ONNX Runtime** (Microsoft), **KaTeX** (Khan Academy), and **highlight.js**.
+Thank you.
