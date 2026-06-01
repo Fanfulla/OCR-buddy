@@ -6,8 +6,11 @@
 
 import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/vs2015.css'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import {
   LOW_CONFIDENCE,
+  type DocBlock,
   type Message,
   type OcrResult,
   type OcrStage,
@@ -175,11 +178,13 @@ function renderText() {
 
   if (lastResult.mode === 'document') {
     textEl.classList.remove('hljs')
+    textEl.classList.add('doc')
     textEl.contentEditable = 'false'
-    textEl.textContent = lastResult.docText ?? ''
+    renderDocBlocks(lastResult.docBlocks ?? [])
     uncertainSummary.hidden = true
     return
   }
+  textEl.classList.remove('doc')
 
   if (codeMode) {
     // hljs auto-detects the language and escapes the input, so innerHTML is safe.
@@ -220,6 +225,100 @@ function renderText() {
   }
 }
 
+/** Render document-mode blocks: text-like blocks as semantic elements, tables as
+ *  real tables, and each equation as KaTeX shown BESIDE its source crop so the
+ *  user can verify the transcription. KaTeX render failure → abstain to the image
+ *  (we never present invented LaTeX as if it were read). */
+function renderDocBlocks(blocks: DocBlock[]) {
+  const frag = document.createDocumentFragment()
+  for (const b of blocks) {
+    if (b.kind === 'heading') {
+      const h = document.createElement('h2')
+      h.className = 'doc-h'
+      h.textContent = b.text
+      frag.appendChild(h)
+    } else if (b.kind === 'caption') {
+      const c = document.createElement('p')
+      c.className = 'doc-cap'
+      c.textContent = b.text
+      frag.appendChild(c)
+    } else if (b.kind === 'paragraph') {
+      const p = document.createElement('p')
+      p.className = 'doc-p'
+      p.textContent = b.text
+      frag.appendChild(p)
+    } else if (b.kind === 'figure') {
+      const f = document.createElement('div')
+      f.className = 'doc-placeholder'
+      f.textContent = 'Figure'
+      frag.appendChild(f)
+    } else if (b.kind === 'table') {
+      frag.appendChild(renderMarkdownTable(b.markdown))
+    } else if (b.kind === 'equation') {
+      frag.appendChild(renderEquation(b))
+    }
+  }
+  textEl.replaceChildren(frag)
+}
+
+function renderMarkdownTable(markdown: string): HTMLElement {
+  const rows = markdown
+    .trim()
+    .split('\n')
+    .map((r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
+  const table = document.createElement('table')
+  table.className = 'doc-table'
+  rows.forEach((cells, i) => {
+    // Row 1 is the markdown separator (---) — skip it.
+    if (i === 1 && cells.every((c) => /^-+$/.test(c))) return
+    const tr = document.createElement('tr')
+    for (const cell of cells) {
+      const el = document.createElement(i === 0 ? 'th' : 'td')
+      el.textContent = cell.replace(/\\\|/g, '|')
+      tr.appendChild(el)
+    }
+    table.appendChild(tr)
+  })
+  return table
+}
+
+function renderEquation(b: Extract<DocBlock, { kind: 'equation' }>): HTMLElement {
+  const fig = document.createElement('figure')
+  fig.className = 'doc-eq'
+
+  let rendered: string | null = null
+  if (b.ok && b.latex) {
+    try {
+      rendered = katex.renderToString(b.latex, { displayMode: true, throwOnError: true })
+    } catch {
+      rendered = null // unparseable LaTeX → abstain to the image
+    }
+  }
+
+  const crop = document.createElement('img')
+  crop.className = 'doc-eq-crop'
+  crop.src = b.cropDataUrl
+  crop.alt = 'source equation'
+
+  const hint = document.createElement('figcaption')
+  hint.className = 'doc-eq-hint'
+
+  if (rendered) {
+    const out = document.createElement('div')
+    out.className = 'doc-eq-render'
+    out.innerHTML = rendered // KaTeX output is sanitized HTML
+    fig.append(out, crop)
+    hint.textContent = 'Rendered from the source above — verify they match.'
+    fig.dataset.ok = 'true'
+  } else {
+    fig.append(crop)
+    hint.textContent = 'Could not transcribe — shown as image (nothing invented).'
+    fig.dataset.ok = 'false'
+  }
+  fig.appendChild(hint)
+  return fig
+}
+
 function setMode(code: boolean) {
   codeMode = code
   seg.dataset.mode = code ? 'code' : 'prose'
@@ -236,7 +335,10 @@ const COPY_ICON = '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path 
 const CHECK_ICON = '<polyline points="20 6 9 17 4 12"></polyline>'
 
 copyBtn.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(textEl.textContent ?? '')
+  // Document mode: copy the assembled Markdown (with $$LaTeX$$), not the rendered DOM.
+  const payload =
+    lastResult?.mode === 'document' ? (lastResult.docText ?? '') : (textEl.textContent ?? '')
+  await navigator.clipboard.writeText(payload)
   const label = copyBtn.querySelector('.copy-label')!
   const icon = copyBtn.querySelector('.ic-copy')!
   label.textContent = 'Copied'

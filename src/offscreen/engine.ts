@@ -10,7 +10,8 @@ import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
 import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
 import { detectLayout, type LayoutLabel, type Region } from './layout'
-import type { OcrWord } from '../shared/messages'
+import { recognizeFormula } from './formula'
+import type { DocBlock, OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
 ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/')
@@ -412,43 +413,74 @@ function reconstructTable(words: OcrWord[]): string | null {
 
 export interface DocOutput {
   docText: string
+  docBlocks: DocBlock[]
   backend: 'webgpu' | 'wasm'
   empty: boolean
 }
 
-/** Run layout detection, then OCR each text region in reading order and assemble
- * a Markdown document. Tables/figures/equations are placeholders for now. */
+const blobToDataUrl = (buf: ArrayBuffer): Promise<string> =>
+  new Promise((resolve) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result as string)
+    fr.readAsDataURL(new Blob([buf], { type: 'image/png' }))
+  })
+
+/** Run layout detection, then handle each region in reading order: text-like
+ * regions → OCR; tables → geometry-reconstructed grid; equations → LaTeX (with
+ * the source crop kept for the panel's KaTeX-vs-crop check). Returns both rich
+ * blocks (for rendering) and assembled Markdown (for Copy). */
 export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOutput> {
   const bitmap = await createImageBitmap(new Blob([imageBuffer]))
   const regions = await detectLayout(bitmap)
   const ordered = orderRegions(regions, bitmap.width)
 
-  const parts: string[] = []
+  const blocks: DocBlock[] = []
+  const md: string[] = []
   for (const r of ordered) {
     const kind = classifyRegion(r.label)
     if (kind === 'skip') continue
     if (kind === 'table') {
       const tbl = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
-      const md = reconstructTable(tbl.words)
-      parts.push(md ?? '> **[ Table ]** — could not reconstruct structure')
+      const grid = reconstructTable(tbl.words)
+      if (grid) {
+        blocks.push({ kind: 'table', markdown: grid })
+        md.push(grid)
+      } else {
+        blocks.push({ kind: 'paragraph', text: '[ Table — could not reconstruct structure ]' })
+        md.push('> **[ Table ]** — could not reconstruct structure')
+      }
       continue
     }
     if (kind === 'equation') {
-      parts.push('> **[ Equation ]** — LaTeX coming soon')
+      const buf = await cropToBuffer(bitmap, r.box)
+      const crop = await createImageBitmap(new Blob([buf]))
+      const { latex, ok } = await recognizeFormula(crop)
+      crop.close()
+      const cropDataUrl = await blobToDataUrl(buf)
+      blocks.push({ kind: 'equation', latex, cropDataUrl, ok })
+      md.push(ok && latex ? `$$\n${latex}\n$$` : '> **[ Equation ]** — shown as image (not transcribed)')
       continue
     }
     if (kind === 'figure') {
-      parts.push('> **[ Figure ]**')
+      blocks.push({ kind: 'figure' })
+      md.push('> **[ Figure ]**')
       continue
     }
     // Text-like region → OCR its crop independently (no cross-column merging).
     const out = await recognizeBuffer(await cropToBuffer(bitmap, r.box))
-    const text = out.text.trim().replace(/\n/g, kind === 'paragraph' ? ' ' : ' ')
+    const text = out.text.trim().replace(/\n/g, ' ')
     if (!text) continue
-    if (kind === 'title') parts.push(`## ${text}`)
-    else if (kind === 'caption') parts.push(`*${text}*`)
-    else parts.push(text)
+    if (kind === 'title') {
+      blocks.push({ kind: 'heading', text })
+      md.push(`## ${text}`)
+    } else if (kind === 'caption') {
+      blocks.push({ kind: 'caption', text })
+      md.push(`*${text}*`)
+    } else {
+      blocks.push({ kind: 'paragraph', text })
+      md.push(text)
+    }
   }
   bitmap.close()
-  return { docText: parts.join('\n\n'), backend, empty: parts.length === 0 }
+  return { docText: md.join('\n\n'), docBlocks: blocks, backend, empty: blocks.length === 0 }
 }

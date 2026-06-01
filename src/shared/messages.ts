@@ -85,6 +85,16 @@ export interface OcrWord {
   line: number
 }
 
+/** One rendered block of a document-mode result, in reading order. Text-like
+ *  blocks carry plain text; equations carry LaTeX + the exact source crop fed to
+ *  the model, so the panel can render KaTeX beside it (the anti-hallucination
+ *  check) and abstain to the image when `ok` is false. */
+export type DocBlock =
+  | { kind: 'heading' | 'paragraph' | 'caption'; text: string }
+  | { kind: 'table'; markdown: string }
+  | { kind: 'figure' }
+  | { kind: 'equation'; latex: string; cropDataUrl: string; ok: boolean }
+
 /** Final result. */
 export interface OcrResult {
   type: 'OCR_RESULT'
@@ -94,8 +104,10 @@ export interface OcrResult {
   text: string
   /** Code view: line breaks + indentation reconstructed from box geometry. */
   codeText: string
-  /** Document mode: assembled Markdown of the page (layout-driven). */
+  /** Document mode: assembled Markdown of the page (layout-driven) — for Copy. */
   docText?: string
+  /** Document mode: structured blocks in reading order, for rich rendering. */
+  docBlocks?: DocBlock[]
   words: OcrWord[]
   /** Which backend actually ran. */
   backend: 'webgpu' | 'wasm'

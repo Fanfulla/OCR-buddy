@@ -28,6 +28,7 @@ async function run(req: RunOcr): Promise<void> {
         text: out.docText,
         codeText: out.docText,
         docText: out.docText,
+        docBlocks: out.docBlocks,
         words: [],
         backend: out.backend,
         imageDataUrl: req.imageDataUrl,

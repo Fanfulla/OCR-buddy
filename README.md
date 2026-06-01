@@ -79,8 +79,18 @@ Implemented since: **smart upscaling** of small crops (low-res video lever) and 
 **code view** that reconstructs indentation from box geometry (toggle in the panel,
 default off). Both checked by `npm run verify`.
 
+**Document mode** (toggle at idle) runs layout analysis (PicoDet CDLA, Apache-2.0)
+and assembles a structured page in reading order: titles, columns, captions,
+**tables → Markdown** (pure geometry), and **equations → LaTeX**. The equation
+model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr), MIT) is the
+one autoregressive piece in the stack, so the panel renders its LaTeX with **KaTeX
+beside the source crop** for a visual faithfulness check — and abstains to the
+image (never invents) when it can't render. Output copies as Markdown (with
+`$$…$$`). See `public/models/SOURCE.md` for model provenance.
+
 Deferred: an optional ML super-resolution model; richer intra-line spacing; moving
-inference to a dedicated worker.
+inference to a dedicated worker. **Future (remote):** fine-tuning the bundled
+models on a curated set for a specific recurring failure mode (not v1).
 
 ## Develop
 
