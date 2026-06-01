@@ -19,7 +19,7 @@ const M = join(ROOT, 'public', 'models')
 
 // ── reading order + prose assembly (mirror of engine.ts / ocr-bench.mjs) ──────
 const HOMO = { Ν: 'N', Ο: 'O', Ρ: 'P', Τ: 'T', ν: 'v', ο: 'o', ρ: 'p', τ: 't', а: 'a', е: 'e', о: 'o', с: 'c', р: 'p', у: 'y', х: 'x' }
-const deHomoglyph = (s) => Array.from(s, (c) => HOMO[c] ?? c).join('')
+const deHomoglyph = (s) => Array.from(s, (c) => HOMO[c] ?? c).join('').replace(/(?<=[1-9])[oO](?=\d)/g, '0')
 const hasText = (w) => w.text.trim().length > 0
 const median = (xs) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
 function groupLines(boxes, lineH) {

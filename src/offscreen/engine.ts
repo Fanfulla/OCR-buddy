@@ -125,6 +125,12 @@ const HOMOGLYPHS: Record<string, string> = {
 const deHomoglyph = (s: string): string =>
   Array.from(s, (ch) => HOMOGLYPHS[ch] ?? ch).join('')
 
+// Same spirit as the homoglyph fold, for the one ambiguous Latin pair: an 'o'/'O'
+// wedged between a non-zero digit and a digit is a misread '0' ("4o0" → "400").
+// Requiring a 1–9 before keeps code identifiers (x0, arg0), ordinary words, and
+// the octal prefix "0o" (0o755) intact — important for Text/Code mode.
+const fixDigitOh = (s: string): string => s.replace(/(?<=[1-9])[oO](?=\d)/g, '0')
+
 interface Row {
   raw: number // leading indent in char units
   text: string // line text with intra-line spacing reconstructed from gaps
@@ -250,8 +256,9 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   const canvas = await prepareImage(imageBuffer)
   const res = await svc.recognize(canvas, { flatten: false })
 
-  // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin.
-  for (const line of res.lines) for (const w of line) w.text = deHomoglyph(w.text)
+  // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin,
+  // and a digit-context 'o'→'0' (e.g. "4o0" → "400").
+  for (const line of res.lines) for (const w of line) w.text = fixDigitOh(deHomoglyph(w.text))
 
   // Re-group into column-aware reading order (fixes multi-column papers that the
   // engine's full-width line grouping would otherwise read interleaved).
