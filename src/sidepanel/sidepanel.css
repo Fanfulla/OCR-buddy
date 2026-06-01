@@ -147,7 +147,10 @@ header {
 
 /* Capture-mode picker (Text / Document / Formula) — segmented, on the idle card. */
 .mode-pick {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
   margin-top: 6px;
   padding: 3px;
   background: var(--surface);
@@ -162,7 +165,7 @@ header {
   font: inherit;
   font-size: 12.5px;
   font-weight: 560;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;

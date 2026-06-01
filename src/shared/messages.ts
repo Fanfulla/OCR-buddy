@@ -12,9 +12,9 @@ export interface Rect {
   height: number
 }
 
-/** The three capture modes: quick OCR, full-page document layout, or a single
- *  formula → LaTeX. */
-export type CaptureMode = 'quick' | 'document' | 'formula'
+/** Capture modes: quick OCR, full-page document layout, a single formula → LaTeX,
+ *  or a single table → Markdown. */
+export type CaptureMode = 'quick' | 'document' | 'formula' | 'table'
 
 /** Panel → SW: user pressed "Select region"; begin a capture on the active tab. */
 export interface StartSelection {

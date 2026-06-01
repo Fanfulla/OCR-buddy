@@ -82,11 +82,15 @@ default off). Both checked by `npm run verify`.
 Three **capture modes** (picker at idle):
 
 - **Text** — quick OCR of any region (the default).
-- **Document** — layout analysis (PicoDet CDLA, Apache-2.0) assembles a structured
-  page in reading order: titles, columns, captions, and **tables → Markdown** (pure
-  geometry). Equation regions detected in a full page are transcribed too.
-- **Formula** — a single equation → LaTeX, for when you capture one formula on its
-  own (the page-layout model can't tag a standalone crop as an equation).
+- **Document** — layout analysis (PicoDet CDLA, Apache-2.0) assembles a full,
+  multi-element *page* in reading order: titles, columns, captions, tables, and
+  equations *in context*. This is where the layout model works — single tight
+  crops of one element are misclassified, which is why the next two modes exist.
+- **Formula** — a single equation → LaTeX (the page-layout model can't tag a
+  standalone crop as an equation).
+- **Table** — a single table → Markdown grid, reconstructed by pure geometry from
+  column alignment, so **borderless tables** work (the layout model reads those as
+  figures).
 
 The equation model ([pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr),
 MIT) is the one autoregressive piece in the stack. It's accurate on clean formulas

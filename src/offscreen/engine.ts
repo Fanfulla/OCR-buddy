@@ -485,6 +485,24 @@ export async function recognizeDocument(imageBuffer: ArrayBuffer): Promise<DocOu
   return { docText: md.join('\n\n'), docBlocks: blocks, backend, empty: blocks.length === 0 }
 }
 
+/** Table mode: OCR the whole crop and rebuild the grid by geometry — no layout
+ * model, so borderless tables (which the page-layout model misreads as Figure)
+ * work. Falls back to plain text when the crop isn't grid-like. */
+export async function recognizeTableImage(
+  imageBuffer: ArrayBuffer,
+): Promise<{ docBlocks: DocBlock[]; docText: string; backend: 'webgpu' | 'wasm'; empty: boolean }> {
+  const out = await recognizeBuffer(imageBuffer)
+  const md = reconstructTable(out.words)
+  if (md) return { docBlocks: [{ kind: 'table', markdown: md }], docText: md, backend, empty: false }
+  const text = out.text.trim()
+  return {
+    docBlocks: text ? [{ kind: 'paragraph', text }] : [],
+    docText: text,
+    backend,
+    empty: !text,
+  }
+}
+
 /** Formula mode: recognize one captured equation crop as LaTeX. */
 export async function recognizeFormulaImage(
   imageBuffer: ArrayBuffer,

@@ -42,8 +42,9 @@ const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.mode-
 let captureMode: CaptureMode = 'quick'
 const MODE_DESC: Record<CaptureMode, string> = {
   quick: 'Quick OCR — code, prose, or any text.',
-  document: 'Document — layout, columns, tables & equations.',
+  document: 'Document — a full page: columns, headings, tables & equations.',
   formula: 'Formula — one equation → LaTeX, rendered beside the crop to verify.',
+  table: 'Table — one table → Markdown grid (works on borderless tables too).',
 }
 for (const btn of modeBtns) {
   btn.addEventListener('click', () => {
@@ -140,7 +141,20 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
 permEnable.addEventListener('click', async () => {
   // Must run in a user gesture (this click) — the side panel is an extension page.
   const origins = needOrigin ? [`${needOrigin}/*`] : ['<all_urls>']
-  const granted = await chrome.permissions.request({ origins })
+  let granted = false
+  try {
+    granted = await chrome.permissions.request({ origins })
+  } catch (err) {
+    // A managed/policy browser can REJECT host-permission requests outright (the
+    // prompt never appears). Don't fail silently — explain and offer the activeTab
+    // path, which needs no host grant.
+    permWhy.hidden = false
+    permWhy.textContent =
+      `Your browser blocked the site-permission request (${err instanceof Error ? err.message : String(err)}). ` +
+      'You can still capture the tab you opened the panel from: press Ctrl+Shift+Y on the page, ' +
+      'or click the OCR Buddy toolbar icon there.'
+    return
+  }
   if (granted) {
     chrome.runtime.sendMessage({ type: 'PERMISSION_GRANTED' } satisfies PermissionGranted)
     busyLabel.textContent = 'Capturing region…'
@@ -150,7 +164,8 @@ permEnable.addEventListener('click', async () => {
     busySkeleton.hidden = false
     setState('busy')
   } else {
-    permWhy.hidden = false // calm explanation, no alarmism
+    // Denied (or silently refused by policy): calm explanation, no alarmism.
+    permWhy.hidden = false
   }
 })
 
@@ -195,7 +210,7 @@ function renderText() {
   if (!lastResult) return
   textEl.replaceChildren()
 
-  if (lastResult.mode === 'document') {
+  if (lastResult.mode === 'document' || lastResult.mode === 'table') {
     textEl.classList.remove('hljs')
     textEl.classList.add('doc')
     textEl.contentEditable = 'false'
@@ -393,7 +408,7 @@ copyBtn.addEventListener('click', async () => {
   // Copy the source, not the rendered DOM: Markdown for documents, raw LaTeX for
   // formulas, plain text otherwise.
   const payload =
-    lastResult?.mode === 'document'
+    lastResult?.mode === 'document' || lastResult?.mode === 'table'
       ? (lastResult.docText ?? '')
       : lastResult?.mode === 'formula'
         ? (lastResult.latex ?? '')
