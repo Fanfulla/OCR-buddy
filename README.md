@@ -220,6 +220,25 @@ npm run verify                     # load the built extension in Chromium (Playw
 
 ---
 
+## Models
+
+All models are bundled in the extension (`public/models/`) and run entirely
+on-device. Provenance and pinned versions are in `public/models/SOURCE.md`.
+
+| Model | Role | Source | License |
+|---|---|---|---|
+| `PP-OCRv5_mobile_det_infer.onnx` (~4.7 MB) | Text detection | [ppu-paddle-ocr-models](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models) · upstream [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | Apache-2.0 |
+| `latin_PP-OCRv5_mobile_rec_infer.onnx` (~8 MB) | Latin text recognition (CTC) | [ppu-paddle-ocr-models](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models) · upstream [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | Apache-2.0 |
+| `mfr_decoder.onnx` (~30 MB) + tokenizer | Formula → LaTeX decoder | [breezedeus/pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr) | MIT |
+| `mfr_encoder.onnx` (~23 MB, int8) | Formula image encoder | [Brian314/pix2text-mfr-quantized](https://huggingface.co/Brian314/pix2text-mfr-quantized) | MIT |
+
+Inference runs on [ONNX Runtime Web](https://github.com/microsoft/onnxruntime)
+(WebGPU, with multi-threaded WASM fallback), via
+[ppu-paddle-ocr](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr) for the
+PP-OCRv5 path.
+
+---
+
 ## License
 
 OCR Buddy's own source code is **MIT** (see [`LICENSE`](LICENSE)).
