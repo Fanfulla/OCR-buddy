@@ -311,19 +311,27 @@ function reconstructTable(words: OcrWord[]): string | null {
   }
   if (rows.length < 2) return null
 
-  // Columns from the x coverage profile: a gutter is a run of x-bins covered by
-  // <~18% of rows; columns are the populated runs between gutters.
   const xMin = Math.min(...ws.map((w) => w.box.x))
   const xMax = Math.max(...ws.map((w) => w.box.x + w.box.width))
+  const tableW = Math.max(1, xMax - xMin)
+  // A single wide box on its own line is a merged header or a caption/title, not a
+  // data row — it would bridge the inter-column gutters. Find columns from the data
+  // rows only (>=2 boxes with real gaps).
+  const isSpan = (row: OcrWord[]) => row.length === 1 && row[0].box.width > 0.55 * tableW
+  const dataRows = rows.filter((row) => !isSpan(row))
+  if (dataRows.length < 2) return null
+
+  // Columns from the x coverage profile: a gutter is a run of x-bins covered by
+  // <~18% of data rows; columns are the populated runs between gutters.
   const bin = Math.max(2, Math.round(medH * 0.3))
   const nb = Math.ceil((xMax - xMin) / bin) + 1
   const cov = new Array(nb).fill(0)
-  for (const w of ws) {
+  for (const w of dataRows.flat()) {
     const a = Math.floor((w.box.x - xMin) / bin)
     const b = Math.floor((w.box.x + w.box.width - xMin) / bin)
     for (let i = Math.max(0, a); i <= Math.min(nb - 1, b); i++) cov[i]++
   }
-  const gut = Math.max(1, rows.length * 0.18)
+  const gut = Math.max(1, dataRows.length * 0.18)
   const isGut = cov.map((c) => c <= gut)
   const cols: [number, number][] = []
   let start = -1
@@ -359,14 +367,25 @@ function reconstructTable(words: OcrWord[]): string | null {
   }
 
   const ncol = cols.length
-  const grid = rows.map((row) => {
+  // Build the grid. A single wide box whose word count matches the column count is a
+  // header split across the columns ("Parameters Decoder Encoder"); otherwise it's a
+  // caption/prose line and is dropped from the grid.
+  const grid: string[][] = []
+  for (const row of rows) {
     const cells = Array.from({ length: ncol }, () => '')
-    for (const w of [...row].sort((a, b) => a.box.x - b.box.x)) {
-      const c = colOf(w)
-      cells[c] = cells[c] ? `${cells[c]} ${w.text}` : w.text
+    if (isSpan(row)) {
+      const parts = row[0].text.trim().split(/\s+/)
+      if (parts.length !== ncol) continue
+      parts.forEach((p, i) => (cells[i] = p))
+    } else {
+      for (const w of [...row].sort((a, b) => a.box.x - b.box.x)) {
+        const c = colOf(w)
+        cells[c] = cells[c] ? `${cells[c]} ${w.text}` : w.text
+      }
     }
-    return cells.map((c) => c.trim())
-  })
+    if (cells.some((c) => c.trim())) grid.push(cells.map((c) => c.trim()))
+  }
+  if (grid.length < 2) return null
 
   const esc = (s: string) => s.replace(/\|/g, '\\|')
   const md = [
