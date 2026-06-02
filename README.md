@@ -9,6 +9,14 @@ back. No server. No image ever leaves your machine. No hallucinated text.
 
 ---
 
+## Demo
+
+<video src="https://ocr-buddy.com/assets/demo/demo1.mp4" controls muted playsinline width="100%"></video>
+
+<video src="https://ocr-buddy.com/assets/demo/demo2.mp4" controls muted playsinline width="100%"></video>
+
+---
+
 ## Why this exists
 
 Modern OCR is dominated by large autoregressive vision-language models. They top
