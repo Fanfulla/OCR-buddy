@@ -52,7 +52,27 @@ async function main() {
       indents[3] === 2 * indents[1]
     log('CODE_INDENT_OK=' + codeOk)
 
-    document.body.dataset.done = anchorOk && codeOk ? 'ok' : 'partial'
+    // --- Emoji: a low-res code frame with inline emoji. An undetected emoji splits
+    // a line into two boxes with a wide gap; the column-aware reading order must NOT
+    // read the trailing fragment as a separate column (which floated it to the end).
+    const e = await recognizeBuffer(await fetchBuf('test/sample_emoji.png'))
+    log('\n[emoji sample_emoji.png]')
+    log('--- codeText ---')
+    log(e.codeText)
+    log('--- /codeText ---')
+    const elines = e.codeText.split('\n')
+    const sprinklesLine = elines.find((l) => l.includes('You add sprinkles')) ?? ''
+    // The "*\"" fragment after the emoji must rejoin its own line, not float alone.
+    const emojiOk = sprinklesLine.includes('*"') && !elines.some((l) => l.trim() === '*"')
+    log('EMOJI_LINE_OK=' + emojiOk)
+    // The emoji itself is marked with the unread-glyph placeholder on its own line.
+    // Both emoji are marked: the mid-line 🐝 on the sprinkles line, and the trailing
+    // 🍧 at the end of the "ice cream" line.
+    const creamLine = elines.find((l) => l.includes('your ice cream')) ?? ''
+    const emojiMarkOk = sprinklesLine.includes('□') && creamLine.includes('□')
+    log('EMOJI_MARK_OK=' + emojiMarkOk)
+
+    document.body.dataset.done = anchorOk && codeOk && emojiOk && emojiMarkOk ? 'ok' : 'partial'
   } catch (e) {
     log('ERROR: ' + (e instanceof Error ? (e.stack ?? e.message) : String(e)))
     document.body.dataset.done = 'err'

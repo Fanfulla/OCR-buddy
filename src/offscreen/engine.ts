@@ -131,6 +131,73 @@ const deHomoglyph = (s: string): string =>
 // the octal prefix "0o" (0o755) intact — important for Text/Code mode.
 const fixDigitOh = (s: string): string => s.replace(/(?<=[1-9])[oO](?=\d)/g, '0')
 
+// Placeholder for a glyph the recognizer couldn't read (typically an emoji, which
+// the Latin model can't emit and detection doesn't even box). Change this one
+// symbol to taste. U+25A1 "white square" = the classic unknown-glyph mark.
+const UNREAD_GLYPH = '□'
+
+/** Fraction of a canvas region's pixels that are strongly chromatic (max−min RGB).
+ * Theme-independent: a blank gap or near-mono code/text scores ~0 on any
+ * background; a colourful emoji scores high. */
+function gapChroma(ctx: OffscreenCanvasRenderingContext2D, cw: number, ch: number,
+  x: number, y: number, w: number, h: number): number {
+  x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y))
+  w = Math.min(cw - x, Math.round(w)); h = Math.min(ch - y, Math.round(h))
+  if (w <= 0 || h <= 0) return 0
+  const data = ctx.getImageData(x, y, w, h).data
+  let chroma = 0
+  const n = data.length / 4
+  for (let i = 0; i < data.length; i += 4) {
+    if (Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) chroma++
+  }
+  return n ? chroma / n : 0
+}
+
+// A gap between two text boxes wider than this (× line height) is a hole, not an
+// inter-word space — worth probing for an undetected glyph.
+const HOLE_GAP = 0.5
+// A gap this chromatic holds a colourful glyph (emoji), not blank space or text.
+const EMOJI_CHROMA = 0.05
+
+/**
+ * Mark glyphs the recognizer couldn't read so they don't silently vanish. An emoji
+ * gets no detection box — it leaves a wide gap between two text boxes. For each
+ * such hole we sample the crop's colourfulness: high chroma = a colourful glyph
+ * (emoji) sat there, so we insert a placeholder box in the gap and line
+ * reconstruction keeps the spot. Honest by construction: a blank gap (chroma ≈ 0)
+ * stays whitespace, so ordinary spacing/alignment is never marked.
+ */
+function markUnreadGlyphs(canvas: OffscreenCanvas, lines: RecognitionResult[][]): void {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  for (const line of lines) {
+    const ws = line.filter(hasText).sort((a, b) => a.box.x - b.box.x)
+    if (!ws.length) continue
+    const lineH = median(ws.map((b) => b.box.height)) || 1
+    for (let i = 1; i < ws.length; i++) {
+      const g0 = ws[i - 1].box.x + ws[i - 1].box.width
+      const g1 = ws[i].box.x
+      if (g1 - g0 < lineH * HOLE_GAP) continue
+      const y = Math.min(ws[i - 1].box.y, ws[i].box.y)
+      const h = Math.max(ws[i - 1].box.height, ws[i].box.height)
+      const chroma = gapChroma(ctx, canvas.width, canvas.height, g0, y, g1 - g0, h)
+      if (chroma > EMOJI_CHROMA) {
+        line.push({ text: UNREAD_GLYPH, confidence: chroma, box: { x: g0, y, width: g1 - g0, height: h } })
+      }
+    }
+    // Trailing emoji: no right-hand box bounds it, so probe past the last box. The
+    // window must clear the space between text and emoji (a too-tight window dilutes
+    // the chroma below threshold), so reach ~2 line-heights. Same chroma gate.
+    const last = ws[ws.length - 1]
+    const tx = last.box.x + last.box.width
+    const tw = lineH * 2
+    const chroma = gapChroma(ctx, canvas.width, canvas.height, tx, last.box.y, tw, last.box.height)
+    if (chroma > EMOJI_CHROMA) {
+      line.push({ text: UNREAD_GLYPH, confidence: chroma, box: { x: tx, y: last.box.y, width: tw, height: last.box.height } })
+    }
+  }
+}
+
 interface Row {
   raw: number // leading indent in char units
   text: string // line text with intra-line spacing reconstructed from gaps
@@ -181,6 +248,18 @@ function groupReadingOrder(boxes: RecognitionResult[]): RecognitionResult[][] {
     const cx = b.box.x + b.box.width / 2
     const i = bands.findIndex((band) => cx >= band.x0 && cx <= band.x1)
     return i < 0 ? 0 : i
+  }
+
+  // A real multi-column layout has no visual line crossing a gutter. If some line
+  // has boxes in two different bands, the "gutter" is just an in-line gap — e.g. an
+  // undetected emoji splitting a line into "print(... sprinkles" + "*\")" — not a
+  // column. Treat the crop as single-column so the fragment stays on its own line
+  // (grouped by y) instead of being read as a separate column at the very end.
+  if (bands.length > 1) {
+    const crossesGutter = groupLines(ws, lineH).some(
+      (line) => new Set(line.map(colOf)).size > 1,
+    )
+    if (crossesGutter) return groupLines(ws, lineH)
   }
 
   const out: RecognitionResult[][] = []
@@ -259,6 +338,10 @@ export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutp
   // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin,
   // and a digit-context 'o'→'0' (e.g. "4o0" → "400").
   for (const line of res.lines) for (const w of line) w.text = fixDigitOh(deHomoglyph(w.text))
+
+  // Mark colourful glyphs the recognizer couldn't read (e.g. emoji) with a
+  // placeholder, so they don't silently disappear and corrupt the line.
+  markUnreadGlyphs(canvas, res.lines)
 
   // Re-group into column-aware reading order (fixes multi-column papers that the
   // engine's full-width line grouping would otherwise read interleaved).
