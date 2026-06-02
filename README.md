@@ -15,7 +15,7 @@ back. No server. No image ever leaves your machine. No hallucinated text.
 
 ![OCR Buddy demo 2](https://ocr-buddy.com/assets/demo/demo2.webp)
 
-*Silent autoplay loops. ▶ Watch with audio: [demo 1](https://ocr-buddy.com/assets/demo/demo1.mp4) · [demo 2](https://ocr-buddy.com/assets/demo/demo2.mp4).*
+*Silent autoplay loops. ▶ Watch in High Quality Video: [demo 1](https://ocr-buddy.com/assets/demo/demo1.mp4) · [demo 2](https://ocr-buddy.com/assets/demo/demo2.mp4).*
 
 ---
 
