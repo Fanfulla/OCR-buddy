@@ -17,6 +17,9 @@ ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/')
 // Multi-threaded WASM needs SharedArrayBuffer, available because the host page is
 // cross-origin isolated (COOP/COEP). The WebGPU path ignores this.
 ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4
+// Suppress ORT's benign EP-partition warnings (VerifyEachNodeIsAssignedToAnEp:
+// shape ops land on CPU by design). Keeps real errors visible in the panel.
+ort.env.logLevel = 'error'
 
 const MODELS = {
   detection: 'models/PP-OCRv5_mobile_det_infer.onnx',
