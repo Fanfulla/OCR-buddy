@@ -11,9 +11,6 @@ back. No server. No image ever leaves your machine. No hallucinated text.
 
 ## Demo
 
-<video src="https://ocr-buddy.com/assets/demo/demo1.mp4" controls muted playsinline width="100%"></video>
-
-<video src="https://ocr-buddy.com/assets/demo/demo2.mp4" controls muted playsinline width="100%"></video>
 
 ---
 
