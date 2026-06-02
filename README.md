@@ -11,9 +11,11 @@ back. No server. No image ever leaves your machine. No hallucinated text.
 
 ## Demo
 
-<video src="https://ocr-buddy.com/assets/demo/demo1.mp4" controls muted playsinline width="100%"></video>
+[![Watch demo 1 — OCR Buddy in action](https://ocr-buddy.com/assets/demo/poster1.png)](https://ocr-buddy.com/assets/demo/demo1.mp4)
 
-<video src="https://ocr-buddy.com/assets/demo/demo2.mp4" controls muted playsinline width="100%"></video>
+[![Watch demo 2 — OCR Buddy in action](https://ocr-buddy.com/assets/demo/poster2.png)](https://ocr-buddy.com/assets/demo/demo2.mp4)
+
+*▶ Click a thumbnail to play (videos hosted on [ocr-buddy.com](https://ocr-buddy.com)).*
 
 ---
 
