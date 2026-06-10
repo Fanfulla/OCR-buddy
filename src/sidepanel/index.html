@@ -52,6 +52,26 @@
         </div>
         <p id="mode-desc" class="mode-desc">Text/Code — code, prose, or any text.</p>
       </div>
+      <div class="mode-group">
+        <label class="section-label mode-group-label" for="lang-select">Language</label>
+        <select id="lang-select" class="lang-select">
+          <option value="latin">Latin — EN, IT, FR, DE, ES +40 (built-in)</option>
+          <option value="en">English only (~8 MB)</option>
+          <option value="zh">Chinese 中文 + English + Japanese (~17 MB)</option>
+          <option value="cyrillic">Cyrillic — Serbian, Bulgarian… (~8 MB)</option>
+          <option value="eslav">East Slavic — Russian, Ukrainian, Belarusian (~8 MB)</option>
+          <option value="el">Greek — Ελληνικά (~8 MB)</option>
+          <option value="korean">Korean — 한국어 (~14 MB)</option>
+          <option value="th">Thai — ไทย (~8 MB)</option>
+          <option value="devanagari">Devanagari — Hindi, Marathi, Nepali (~8 MB)</option>
+          <option value="ta">Tamil — தமிழ் (~8 MB)</option>
+          <option value="te">Telugu — తెలుగు (~8 MB)</option>
+        </select>
+        <p id="lang-note" class="mode-desc" hidden>
+          Downloaded once from the pinned open-source model repo, then cached —
+          works offline afterwards. Built-in Latin never touches the network.
+        </p>
+      </div>
       <button id="select-btn" class="btn btn-primary big" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 7V5a2 2 0 0 1 2-2h2" />

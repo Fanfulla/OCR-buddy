@@ -20,6 +20,17 @@ ONNX binaries are Git LFS-backed upstream; fetch via the LFS media endpoint
 To update: re-download the same paths at a newer commit, update the SHA above,
 and re-verify Apache-2.0 + tensor IO (Netron).
 
+### On-demand language packs (not bundled)
+
+`src/offscreen/packs.ts` downloads additional PP-OCRv5 recognizers from the SAME
+repo at the SAME pinned commit, once, on explicit user selection, into Cache
+Storage (`ocr-buddy-packs-v1`). Same Apache-2.0 license and provenance as the
+bundled models. Packs: en, zh (root `recognition/PP-OCRv5_mobile_rec_infer.onnx`
++ `ppocrv5_dict.txt`), cyrillic, eslav, el, korean, th, devanagari, ta, te —
+each under `recognition/multi/<id>/v5/`. ONNX via the LFS media endpoint; dict
+.txt via raw (media serves empty bodies for non-LFS files). Arabic exists
+upstream but is not offered (RTL — our line reconstruction would scramble it).
+
 ## Formula recognition (Document mode, Equation regions) — **MIT**
 
 Maps an equation crop to LaTeX. TrOCR-style VisionEncoderDecoder; autoregressive,

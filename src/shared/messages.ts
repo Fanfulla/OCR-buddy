@@ -65,8 +65,8 @@ export interface RunOcr {
   type: 'RUN_OCR'
   /** PNG data URL of the cropped region. */
   imageDataUrl: string
-  /** v1 language scope. */
-  langs: string[]
+  /** Language pack id (src/offscreen/packs.ts); default = bundled Latin. */
+  lang?: string
   /** Which pipeline to run; default quick OCR. */
   mode?: CaptureMode
 }
@@ -154,4 +154,6 @@ export const PREFS_KEY = 'sidepanel.prefs'
 export interface PanelPrefs {
   captureMode?: CaptureMode
   codeMode?: boolean
+  /** Language pack id (src/offscreen/packs.ts); default = bundled Latin. */
+  lang?: string
 }

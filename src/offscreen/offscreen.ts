@@ -17,10 +17,19 @@ async function run(req: RunOcr): Promise<void> {
   try {
     post({ type: 'OCR_STATUS', stage: 'loading-model' })
     const imageBuffer = await (await fetch(req.imageDataUrl)).arrayBuffer()
+    // First use of a non-bundled language pack downloads it (once, then cached);
+    // stream the progress into the panel's loading bar, then hand the bar back
+    // to the recognizing stage once the download completes.
+    const onDownload = (p: number) =>
+      post(
+        p < 1
+          ? { type: 'OCR_STATUS', stage: 'loading-model', progress: p }
+          : { type: 'OCR_STATUS', stage: 'recognizing' },
+      )
 
     if (req.mode === 'table') {
       post({ type: 'OCR_STATUS', stage: 'recognizing' })
-      const tbl = await recognizeTableImage(imageBuffer)
+      const tbl = await recognizeTableImage(imageBuffer, req.lang, onDownload)
       post({ type: 'OCR_STATUS', stage: 'done' })
       post({
         type: 'OCR_RESULT',
@@ -57,7 +66,7 @@ async function run(req: RunOcr): Promise<void> {
     }
 
     post({ type: 'OCR_STATUS', stage: 'recognizing' })
-    const out = await recognizeBuffer(imageBuffer)
+    const out = await recognizeBuffer(imageBuffer, req.lang, onDownload)
 
     post({ type: 'OCR_STATUS', stage: 'done' })
     post({

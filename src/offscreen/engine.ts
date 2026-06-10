@@ -10,6 +10,7 @@ import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
 import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
 import { formulaUsedWasm, recognizeFormula } from './formula'
+import { DEFAULT_PACK, latinFold, loadRecognition } from './packs'
 import type { DocBlock, OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
@@ -21,11 +22,9 @@ ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4
 // shape ops land on CPU by design). Keeps real errors visible in the panel.
 ort.env.logLevel = 'error'
 
-const MODELS = {
-  detection: 'models/PP-OCRv5_mobile_det_infer.onnx',
-  recognition: 'models/latin_PP-OCRv5_mobile_rec_infer.onnx',
-  charactersDictionary: 'models/ppocrv5_latin_dict.txt',
-}
+// Detection is script-agnostic and always bundled; the recognizer + dictionary
+// come from the selected language pack (packs.ts — Latin bundled, rest cached).
+const DETECTION_MODEL = 'models/PP-OCRv5_mobile_det_infer.onnx'
 
 // Detection downscales anything whose long side exceeds this. We raise it above
 // the default 640 so an upscaled small crop keeps its extra detail.
@@ -47,26 +46,44 @@ export interface OcrOutput {
 
 // Memoized as a promise so concurrent RUN_OCR calls share ONE init (a plain
 // instance check would let both build a service and load the models twice).
+// Keyed by language pack: switching language tears the service down and
+// rebuilds it with that pack's recognizer + dictionary.
 let servicePromise: Promise<PaddleOcrService> | null = null
+let serviceLang = ''
 let backend: 'webgpu' | 'wasm' = 'wasm'
 
 const fetchBuf = async (path: string): Promise<ArrayBuffer> =>
   (await fetch(chrome.runtime.getURL(path))).arrayBuffer()
 
-/** Build the engine once; reused across captures. */
-function getService(): Promise<PaddleOcrService> {
-  servicePromise ??= buildService().catch((err) => {
-    servicePromise = null // failed init stays retryable on the next capture
-    throw err
-  })
+/** Build the engine once per language; reused across captures. */
+function getService(lang: string, onProgress?: (p: number) => void): Promise<PaddleOcrService> {
+  if (!servicePromise || serviceLang !== lang) {
+    const prev = servicePromise
+    serviceLang = lang
+    servicePromise = buildService(lang, prev, onProgress).catch((err) => {
+      servicePromise = null // failed init stays retryable on the next capture
+      throw err
+    })
+  }
   return servicePromise
 }
 
-async function buildService(): Promise<PaddleOcrService> {
-  const [detection, recognition, charactersDictionary] = await Promise.all([
-    fetchBuf(MODELS.detection),
-    fetchBuf(MODELS.recognition),
-    fetchBuf(MODELS.charactersDictionary),
+async function buildService(
+  lang: string,
+  prev: Promise<PaddleOcrService> | null,
+  onProgress?: (p: number) => void,
+): Promise<PaddleOcrService> {
+  if (prev) {
+    // Language switch: release the old service's sessions before building anew.
+    try {
+      await (await prev as PaddleOcrService & { destroy?: () => Promise<void> }).destroy?.()
+    } catch {
+      /* old service already broken — nothing to release */
+    }
+  }
+  const [detection, { recognition, charactersDictionary }] = await Promise.all([
+    fetchBuf(DETECTION_MODEL),
+    loadRecognition(lang, onProgress),
   ])
   backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
   const service = new PaddleOcrService({
@@ -342,14 +359,21 @@ function toCodeText(rows: Row[]): string {
 }
 
 /** Run detection + recognition on encoded image bytes (e.g. a PNG ArrayBuffer). */
-export async function recognizeBuffer(imageBuffer: ArrayBuffer): Promise<OcrOutput> {
-  const svc = await getService()
+export async function recognizeBuffer(
+  imageBuffer: ArrayBuffer,
+  lang: string = DEFAULT_PACK,
+  onProgress?: (p: number) => void,
+): Promise<OcrOutput> {
+  const svc = await getService(lang, onProgress)
   const canvas = await prepareImage(imageBuffer)
   const res = await svc.recognize(canvas, { flatten: false })
 
-  // Latin-only recognizer: fold stray Greek/Cyrillic look-alikes back to Latin,
-  // and a digit-context 'o'→'0' (e.g. "4o0" → "400").
-  for (const line of res.lines) for (const w of line) w.text = fixDigitOh(deHomoglyph(w.text))
+  // Latin-script packs only: fold stray Greek/Cyrillic look-alikes back to
+  // Latin, and a digit-context 'o'→'0' (e.g. "4o0" → "400"). For non-Latin
+  // packs those glyphs are real text — folding would corrupt it.
+  if (latinFold(lang)) {
+    for (const line of res.lines) for (const w of line) w.text = fixDigitOh(deHomoglyph(w.text))
+  }
 
   // Mark colourful glyphs the recognizer couldn't read (e.g. emoji) with a
   // placeholder, so they don't silently disappear and corrupt the line.
@@ -496,8 +520,10 @@ function reconstructTable(words: OcrWord[]): string | null {
  * work. Falls back to plain text when the crop isn't grid-like. */
 export async function recognizeTableImage(
   imageBuffer: ArrayBuffer,
+  lang: string = DEFAULT_PACK,
+  onProgress?: (p: number) => void,
 ): Promise<{ docBlocks: DocBlock[]; docText: string; backend: 'webgpu' | 'wasm'; empty: boolean }> {
-  const out = await recognizeBuffer(imageBuffer)
+  const out = await recognizeBuffer(imageBuffer, lang, onProgress)
   const md = reconstructTable(out.words)
   if (md) return { docBlocks: [{ kind: 'table', markdown: md }], docText: md, backend, empty: false }
   const text = out.text.trim()

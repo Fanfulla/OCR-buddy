@@ -9,7 +9,6 @@ import { PREFS_KEY } from '../shared/messages'
 import type { CaptureMode, CaptureRequest, Message, PanelPrefs, RunOcr, ShowOverlay } from '../shared/messages'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
-const V1_LANGS = ['en', 'it', 'fr', 'de', 'es'] // Latin + IT/EU (research §v1)
 
 // Toolbar icon: open the panel only. The click grants activeTab for this tab, so
 // the panel's "Select region" button can capture it without page dimming on open.
@@ -56,16 +55,18 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   return false
 })
 
-/** Last capture mode the user picked in the panel (persisted prefs), for entry
- * points that don't carry one (keyboard shortcut, post-grant fallback). */
-async function lastMode(): Promise<CaptureMode> {
+/** The panel's persisted prefs: capture mode for entry points that don't carry
+ * one (keyboard shortcut, post-grant fallback) and the OCR language pack. */
+async function panelPrefs(): Promise<PanelPrefs> {
   try {
     const got = await chrome.storage.local.get(PREFS_KEY)
-    return (got[PREFS_KEY] as PanelPrefs | undefined)?.captureMode ?? 'quick'
+    return (got[PREFS_KEY] as PanelPrefs | undefined) ?? {}
   } catch {
-    return 'quick'
+    return {}
   }
 }
+
+const lastMode = async (): Promise<CaptureMode> => (await panelPrefs()).captureMode ?? 'quick'
 
 async function startActiveTabSelectionWithLastMode(): Promise<void> {
   await startActiveTabSelection(await lastMode())
@@ -124,7 +125,8 @@ async function originOf(tabId: number): Promise<string> {
 /** Re-run OCR on a crop we already captured, in a new mode (no screenshot). */
 async function reprocess(imageDataUrl: string, mode: CaptureMode): Promise<void> {
   await ensureOffscreen()
-  await chrome.runtime.sendMessage({ type: 'RUN_OCR', imageDataUrl, langs: V1_LANGS, mode } satisfies RunOcr)
+  const { lang } = await panelPrefs()
+  await chrome.runtime.sendMessage({ type: 'RUN_OCR', imageDataUrl, lang, mode } satisfies RunOcr)
 }
 
 async function handleCapture(req: CaptureRequest): Promise<void> {
@@ -140,7 +142,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
     const runMsg: RunOcr = {
       type: 'RUN_OCR',
       imageDataUrl: cropDataUrl,
-      langs: V1_LANGS,
+      lang: (await panelPrefs()).lang,
       mode: req.mode,
     }
     await chrome.runtime.sendMessage(runMsg)

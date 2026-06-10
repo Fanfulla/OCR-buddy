@@ -77,8 +77,11 @@ A few choices worth calling out, because each solved a concrete problem:
   `captureVisibleTab` returns clean, composited pixels — so OCR-ing code from a
   paused YouTube video Just Works.
 - **Models are bundled, not downloaded.** They ship inside the extension, so the
-  tool is genuinely offline and nothing — not even a model fetch — touches the
-  network at runtime.
+  default experience is genuinely offline and nothing — not even a model fetch —
+  touches the network at runtime. The one exception is explicit: choosing a
+  **non-Latin language pack** downloads that recognizer once (from the same
+  pinned open-source repo the bundled models come from), caches it locally, and
+  never touches the network for it again.
 
 Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
 
@@ -107,7 +110,15 @@ emits glyphs:
 - A **Code view** rebuilds indentation from box geometry and syntax-highlights it.
 - A **homoglyph fold** maps stray Greek/Cyrillic look-alikes back to Latin, and a
   tightly-scoped rule folds an `o` wedged between digits back to `0` (`4o0` → `400`)
-  — without touching code identifiers like `arg0` or octal `0o755`.
+  — without touching code identifiers like `arg0` or octal `0o755`. (Both folds
+  apply only to Latin-script packs — for Cyrillic or Greek packs those glyphs are
+  the real text.)
+- **Language packs.** Latin (EN/IT/FR/DE/ES + ~40 more) is built in. A selector in
+  the panel adds Chinese+Japanese, Cyrillic, East Slavic, Greek, Korean, Thai,
+  Devanagari, Tamil and Telugu — each a PP-OCRv5 recognizer (~8–17 MB) downloaded
+  once on selection and cached for offline use. No Arabic yet: the line/spacing
+  reconstruction assumes left-to-right, and shipping a language it would scramble
+  is the kind of overpromise this project avoids.
 
 ### 🅕 Formula → LaTeX
 
@@ -201,7 +212,10 @@ project is a reaction against.
 ## Privacy
 
 - **Nothing leaves your device.** No servers, no API calls, no telemetry. The only
-  network use is downloading the extension itself from the store.
+  network use is downloading the extension itself from the store — and, if you
+  explicitly pick a non-Latin language pack, a one-time fetch of that model from
+  the pinned open-source repo (a plain file download; no page content, no image,
+  no telemetry rides along). It's cached locally and offline from then on.
 - **Models are bundled**, so even first-run inference is fully offline.
 - The selection overlay is passive and does not read page content; the screenshot
   permission for a site is requested explicitly, per-site, only when needed.
@@ -239,6 +253,7 @@ on-device. Provenance and pinned versions are in `public/models/SOURCE.md`.
 |---|---|---|---|
 | `PP-OCRv5_mobile_det_infer.onnx` (~4.7 MB) | Text detection | [ppu-paddle-ocr-models](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models) · upstream [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | Apache-2.0 |
 | `latin_PP-OCRv5_mobile_rec_infer.onnx` (~8 MB) | Latin text recognition (CTC) | [ppu-paddle-ocr-models](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models) · upstream [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | Apache-2.0 |
+| Language packs (~8–17 MB each, on-demand) | Non-Latin recognition (CTC): zh+ja, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil, Telugu | same repo, pinned commit — downloaded once on selection, cached locally | Apache-2.0 |
 | `mfr_decoder.onnx` (~30 MB) + tokenizer | Formula → LaTeX decoder | [breezedeus/pix2text-mfr](https://huggingface.co/breezedeus/pix2text-mfr) | MIT |
 | `mfr_encoder.onnx` (~23 MB, int8) | Formula image encoder | [Brian314/pix2text-mfr-quantized](https://huggingface.co/Brian314/pix2text-mfr-quantized) | MIT |
 

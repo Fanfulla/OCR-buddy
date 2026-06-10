@@ -43,7 +43,10 @@ const copyBtn = $<HTMLButtonElement>('copy')
 const modeDesc = $('mode-desc')
 const idlePick = $('mode-pick-idle')
 const resultPick = $('mode-pick-result')
+const langSelect = $<HTMLSelectElement>('lang-select')
+const langNote = $('lang-note')
 let captureMode: CaptureMode = 'quick'
+let lang = 'latin'
 const MODE_DESC: Record<CaptureMode, string> = {
   quick: 'Text/Code — code, prose, or any text.',
   formula: 'Formula — one equation → LaTeX, rendered beside the crop to verify.',
@@ -64,7 +67,7 @@ function syncPicker(pick: HTMLElement, mode: CaptureMode) {
 // Persist the last-used capture mode + Prose/Code view across panel opens.
 // (PREFS_KEY is shared: the SW reads it for the keyboard-shortcut mode.)
 function savePrefs() {
-  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode } satisfies PanelPrefs })
+  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode, lang } satisfies PanelPrefs })
 }
 async function restorePrefs() {
   try {
@@ -74,13 +77,28 @@ async function restorePrefs() {
       captureMode = p.captureMode
     }
     if (typeof p?.codeMode === 'boolean') codeMode = p.codeMode
+    // Only restore a pack the select actually offers (stale prefs → default).
+    if (p?.lang && langSelect.querySelector(`option[value="${p.lang}"]`)) lang = p.lang
   } catch {
     /* storage unavailable → keep defaults */
   }
   syncPicker(idlePick, captureMode)
   modeDesc.textContent = MODE_DESC[captureMode]
+  syncLang()
   setMode(codeMode)
 }
+
+/** Reflect the selected pack in the UI; the download note only applies to
+ *  non-bundled packs. */
+function syncLang() {
+  langSelect.value = lang
+  langNote.hidden = lang === 'latin'
+}
+langSelect.addEventListener('change', () => {
+  lang = langSelect.value
+  syncLang()
+  savePrefs()
+})
 
 // Idle picker: choose the mode for the NEXT capture.
 for (const b of idlePick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
@@ -156,7 +174,12 @@ const STAGE: Record<Exclude<OcrStage, 'error'>, StageView> = {
 
 function showStage(stage: Exclude<OcrStage, 'error'>, progress?: number) {
   const v = STAGE[stage] ?? { label: stage, pct: 50, spin: true }
-  busyLabel.textContent = v.label
+  // A 0..1 progress on loading-model means a language pack is downloading
+  // (first use only — cached afterwards). Say so instead of the generic label.
+  busyLabel.textContent =
+    stage === 'loading-model' && progress != null
+      ? `Downloading language pack… ${Math.round(progress * 100)}%`
+      : v.label
   // Model download reports 0..1 — let it drive the bar within the loading band.
   const pct = stage === 'loading-model' && progress != null ? 50 + Math.round(progress * 20) : v.pct
   progressFill.style.width = `${pct}%`
