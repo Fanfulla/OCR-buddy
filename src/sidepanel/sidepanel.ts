@@ -663,6 +663,13 @@ document.addEventListener('drop', (e) => {
   }
 })
 
+// Version next to the brand, read from the manifest so it can't drift.
+$('version').textContent = `v${chrome.runtime.getManifest().version}`
+
+// Home: back to the main (idle) menu from any state — e.g. to change mode or
+// language after a result. The result stays reachable via History.
+$<HTMLButtonElement>('home-btn').addEventListener('click', () => setState('idle'))
+
 // Show the platform-correct modifier in the shortcut hint (⌘ on macOS). The
 // binding itself (Ctrl+Shift+Y / Command+Shift+Y) lives in the manifest command.
 const isMac = /Mac|iPhone|iPad/i.test(navigator.userAgent)
