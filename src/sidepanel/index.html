@@ -27,6 +27,12 @@
         OCR Buddy
       </div>
       <span id="backend" class="badge" data-backend="webgpu" hidden></span>
+      <button id="history-btn" class="icon-btn" type="button" title="History" aria-label="Capture history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 3" />
+        </svg>
+      </button>
     </header>
 
     <!-- IDLE -->
@@ -84,6 +90,12 @@
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
+      <!-- OCR an image directly — no page capture involved. -->
+      <p class="img-hint">
+        …or <button id="open-image" class="linklike" type="button">open an image</button>,
+        paste, or drop one here
+      </p>
+      <input id="image-input" type="file" accept="image/*" hidden />
     </section>
 
     <!-- BUSY -->
@@ -210,6 +222,21 @@
         </svg>
         Try again
       </button>
+    </section>
+
+    <!-- HISTORY (recent captures, stored only on this device) -->
+    <section id="state-history" class="state" hidden>
+      <div class="hist-head">
+        <span class="section-label">History · this device only</span>
+        <button id="hist-back" class="btn btn-secondary btn-sm" type="button">Back</button>
+      </div>
+      <label class="hist-toggle">
+        <input id="hist-enabled" type="checkbox" checked />
+        Save captures to history
+      </label>
+      <div id="hist-list" class="hist-list"></div>
+      <p id="hist-empty" class="hint" hidden>No saved captures yet.</p>
+      <button id="hist-clear" class="btn btn-secondary" type="button">Clear history</button>
     </section>
 
     <!-- PERMISSION (per-site capture consent) -->

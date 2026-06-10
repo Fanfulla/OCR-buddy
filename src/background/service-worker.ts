@@ -24,6 +24,44 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   await startSelection(tab.id, await lastMode())
 })
 
+// Right-click an image → OCR it directly (no region selection). The click also
+// grants activeTab, which doubles as temporary host access for same-origin
+// image fetches.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'ocr-image',
+    title: 'OCR this image with OCR Buddy',
+    contexts: ['image'],
+  })
+})
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'ocr-image' || !info.srcUrl) return
+  if (tab?.id !== undefined) {
+    try {
+      await chrome.sidePanel.open({ tabId: tab.id })
+    } catch {
+      /* panel already open or gesture expired — results still broadcast */
+    }
+  }
+  try {
+    const dataUrl = info.srcUrl.startsWith('data:')
+      ? info.srcUrl
+      : await blobToDataUrl(await (await fetch(info.srcUrl)).blob())
+    // Give the freshly-opened panel a beat to attach its message listener.
+    await new Promise((r) => setTimeout(r, 300))
+    await reprocess(dataUrl, await lastMode())
+  } catch {
+    chrome.runtime.sendMessage({
+      type: 'OCR_STATUS',
+      stage: 'error',
+      message:
+        "Couldn't fetch this image (the site blocks cross-origin access). " +
+        'Use "Select region" over it instead — that path always works.',
+    })
+  }
+})
+
 // The action to retry after the user grants per-site permission: either a
 // selection that couldn't start (overlay/host access) or a capture that failed.
 // The capture mode itself is NOT held here: it rides inside SHOW_OVERLAY /

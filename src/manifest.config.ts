@@ -57,6 +57,7 @@ export default defineManifest({
     'sidePanel', // durable result UI
     'storage', // small settings
     'unlimitedStorage', // cached model files (Cache Storage)
+    'contextMenus', // "OCR this image" on right-click (no install warning)
   ],
 
   // Not requested at install. Asked at runtime, per-site, when the user tries to

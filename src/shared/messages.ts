@@ -156,4 +156,6 @@ export interface PanelPrefs {
   codeMode?: boolean
   /** Language pack id (src/offscreen/packs.ts); default = bundled Latin. */
   lang?: string
+  /** Save captures to local history (default true; stored on-device only). */
+  history?: boolean
 }

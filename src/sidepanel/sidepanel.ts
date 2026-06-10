@@ -67,7 +67,9 @@ function syncPicker(pick: HTMLElement, mode: CaptureMode) {
 // Persist the last-used capture mode + Prose/Code view across panel opens.
 // (PREFS_KEY is shared: the SW reads it for the keyboard-shortcut mode.)
 function savePrefs() {
-  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode, lang } satisfies PanelPrefs })
+  void chrome.storage.local.set({
+    [PREFS_KEY]: { captureMode, codeMode, lang, history: historyEnabled } satisfies PanelPrefs,
+  })
 }
 async function restorePrefs() {
   try {
@@ -77,6 +79,7 @@ async function restorePrefs() {
       captureMode = p.captureMode
     }
     if (typeof p?.codeMode === 'boolean') codeMode = p.codeMode
+    if (typeof p?.history === 'boolean') historyEnabled = p.history
     // Only restore a pack the select actually offers (stale prefs → default).
     if (p?.lang && langSelect.querySelector(`option[value="${p.lang}"]`)) lang = p.lang
   } catch {
@@ -132,8 +135,8 @@ for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
   })
 }
 
-type State = 'idle' | 'busy' | 'result' | 'error' | 'permission'
-const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission']
+type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'history'
+const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'history']
 const setState = (s: State) => {
   for (const name of STATES) $(`state-${name}`).hidden = name !== s
 }
@@ -284,9 +287,10 @@ async function initBadge() {
 }
 void initBadge()
 
-function renderResult(r: OcrResult) {
+function renderResult(r: OcrResult, save = true) {
   lastResult = r
   editedProse = null
+  if (save) void saveToHistory(r)
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
@@ -504,6 +508,159 @@ copyBtn.addEventListener('click', async () => {
     icon.innerHTML = COPY_ICON
     copyBtn.classList.remove('is-done')
   }, 1300)
+})
+
+// ── History: recent captures, stored ONLY in chrome.storage.local ────────────
+// Privacy: entries hold page screenshots, so there's an off switch and a clear
+// button; nothing ever leaves the device.
+
+interface HistEntry {
+  ts: number
+  result: OcrResult
+}
+const HIST_KEY = 'history.v1'
+const HIST_MAX = 20
+let historyEnabled = true
+
+const histBtn = $<HTMLButtonElement>('history-btn')
+const histList = $('hist-list')
+const histEmpty = $('hist-empty')
+const histEnabledBox = $<HTMLInputElement>('hist-enabled')
+const histClear = $<HTMLButtonElement>('hist-clear')
+
+async function loadHistory(): Promise<HistEntry[]> {
+  try {
+    const got = await chrome.storage.local.get(HIST_KEY)
+    return (got[HIST_KEY] as HistEntry[] | undefined) ?? []
+  } catch {
+    return []
+  }
+}
+
+async function saveToHistory(r: OcrResult): Promise<void> {
+  if (!historyEnabled) return
+  try {
+    let list = await loadHistory()
+    // Reinterpreting the same crop ("Read as") updates the entry, not adds one.
+    if (list[0]?.result.imageDataUrl === r.imageDataUrl) list = list.slice(1)
+    list.unshift({ ts: Date.now(), result: r })
+    await chrome.storage.local.set({ [HIST_KEY]: list.slice(0, HIST_MAX) })
+  } catch {
+    /* storage full/unavailable — history is best-effort */
+  }
+}
+
+/** One-line preview of what an entry produced. */
+function histSnippet(r: OcrResult): string {
+  const s = (r.mode === 'formula' ? r.latex : r.mode === 'table' ? r.docText : r.text) ?? ''
+  const t = s.replace(/\s+/g, ' ').trim()
+  return t.length > 90 ? t.slice(0, 90) + '…' : t || '(empty)'
+}
+
+async function openHistory(): Promise<void> {
+  const list = await loadHistory()
+  histEnabledBox.checked = historyEnabled
+  histEmpty.hidden = list.length > 0
+  histList.replaceChildren()
+  for (const e of list) {
+    const row = document.createElement('div')
+    row.className = 'hist-row'
+
+    const open = document.createElement('button')
+    open.type = 'button'
+    open.className = 'hist-open'
+    const img = document.createElement('img')
+    img.src = e.result.imageDataUrl
+    img.alt = ''
+    const meta = document.createElement('span')
+    meta.className = 'hist-meta'
+    const when = document.createElement('span')
+    when.className = 'hist-when'
+    when.textContent = `${new Date(e.ts).toLocaleString()} · ${e.result.mode}`
+    const snip = document.createElement('span')
+    snip.className = 'hist-snip'
+    snip.textContent = histSnippet(e.result)
+    meta.append(when, snip)
+    open.append(img, meta)
+    open.addEventListener('click', () => renderResult(e.result, false))
+
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'hist-del'
+    del.title = 'Delete'
+    del.setAttribute('aria-label', 'Delete this capture')
+    del.textContent = '×'
+    del.addEventListener('click', async () => {
+      const cur = await loadHistory()
+      await chrome.storage.local.set({ [HIST_KEY]: cur.filter((x) => x.ts !== e.ts) })
+      void openHistory()
+    })
+
+    row.append(open, del)
+    histList.appendChild(row)
+  }
+  setState('history')
+}
+
+histBtn.addEventListener('click', () => void openHistory())
+$<HTMLButtonElement>('hist-back').addEventListener('click', () =>
+  setState(lastResult ? 'result' : 'idle'),
+)
+histEnabledBox.addEventListener('change', () => {
+  historyEnabled = histEnabledBox.checked
+  savePrefs()
+})
+histClear.addEventListener('click', async () => {
+  await chrome.storage.local.remove(HIST_KEY)
+  void openHistory()
+})
+
+// ── OCR an image directly (open / paste / drop) — no page capture ────────────
+// Reuses the REPROCESS path: the SW forwards the data URL to the engine exactly
+// as it does when reinterpreting a captured crop.
+
+function ocrDataUrl(imageDataUrl: string): void {
+  chrome.runtime.sendMessage({ type: 'REPROCESS', imageDataUrl, mode: captureMode } satisfies Reprocess)
+  busyLabel.textContent = 'Reading image…'
+  progressFill.style.width = '30%'
+  spinnerEl.hidden = false
+  selectingNote.hidden = true
+  busySkeleton.hidden = false
+  setState('busy')
+}
+
+function ocrImageFile(file: File): void {
+  const fr = new FileReader()
+  fr.onload = () => ocrDataUrl(fr.result as string)
+  fr.readAsDataURL(file)
+}
+
+const imageInput = $<HTMLInputElement>('image-input')
+$<HTMLButtonElement>('open-image').addEventListener('click', () => imageInput.click())
+imageInput.addEventListener('change', () => {
+  const f = imageInput.files?.[0]
+  if (f) ocrImageFile(f)
+  imageInput.value = '' // re-selecting the same file must fire change again
+})
+
+document.addEventListener('paste', (e) => {
+  const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'))
+  const f = item?.getAsFile()
+  if (f) {
+    e.preventDefault()
+    ocrImageFile(f)
+  }
+})
+
+document.addEventListener('dragover', (e) => {
+  if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+})
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer?.files?.[0]
+  if (f?.type.startsWith('image/')) {
+    e.preventDefault()
+    ocrImageFile(f)
+  }
 })
 
 // Show the platform-correct modifier in the shortcut hint (⌘ on macOS). The
