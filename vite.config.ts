@@ -40,6 +40,17 @@ export default defineConfig({
       input: {
         offscreen: 'src/offscreen/offscreen.html',
         testbed: 'src/testbed/testbed.html', // dev/verification page
+        // Selection overlay: NOT a declared content script (that would cost the
+        // all-sites install warning). The SW injects it on demand, which needs a
+        // stable, module-free file — hence the fixed name below.
+        overlay: 'src/content/overlay.ts',
+      },
+      output: {
+        // chrome.scripting.executeScript runs files as CLASSIC scripts: the
+        // overlay entry must keep a known path and contain no import statements
+        // (its only import is type-only, erased at compile time).
+        entryFileNames: (chunk) =>
+          chunk.name === 'overlay' ? 'content/overlay.js' : 'assets/[name]-[hash].js',
       },
     },
   },

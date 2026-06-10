@@ -64,7 +64,8 @@ try {
   panel.on('console', (m) => console.log('  [panel]', m.text()))
   await panel.goto(`chrome-extension://${extId}/src/sidepanel/index.html`)
 
-  // The page under test (content script injects on http://*).
+  // The page under test (the SW injects the overlay on demand — no declared
+  // content script).
   const page = await ctx.newPage()
   page.on('console', (m) => console.log('  [page]', m.text()))
   await page.goto(url)
@@ -75,13 +76,11 @@ try {
   })
   console.log('text box =', box)
 
-  // Fire the overlay on the active tab (what the toolbar action does). The SW
-  // can't read tab URLs without host permissions, so target the active tab.
-  await sw.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-    await chrome.tabs.sendMessage(tab.id, { type: 'SHOW_OVERLAY' })
-  })
-  await page.waitForTimeout(300)
+  // Start selection exactly as the panel's "Select region" button does: the SW
+  // resolves the active tab and dynamically injects the overlay (the production
+  // path — there is no declared content script to message directly).
+  await panel.evaluate(() => chrome.runtime.sendMessage({ type: 'START_SELECTION', mode: 'quick' }))
+  await page.waitForTimeout(500)
 
   // Real drag-select around the text.
   await page.mouse.move(box.x - 12, box.y - 12)

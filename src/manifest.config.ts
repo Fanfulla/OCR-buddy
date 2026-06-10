@@ -45,17 +45,11 @@ export default defineManifest({
     default_path: 'src/sidepanel/index.html',
   },
 
-  // Passive selection overlay on every page: it does nothing until the service
-  // worker sends SHOW_OVERLAY (on action click). Declared (not dynamically
-  // injected) so CRXJS bundles it reliably.
-  content_scripts: [
-    {
-      matches: ['<all_urls>'],
-      js: ['src/content/overlay.ts'],
-      run_at: 'document_idle',
-    },
-  ],
-
+  // No declared content script: a `matches: <all_urls>` declaration triggers the
+  // "read and change all your data on all websites" install warning — poison for
+  // a privacy-first extension. The selection overlay is injected on demand by the
+  // service worker (chrome.scripting + activeTab / granted host), built as a
+  // fixed-name classic script entry in vite.config.ts (content/overlay.js).
   permissions: [
     'activeTab', // captureVisibleTab on the tab where invoked
     'scripting', // inject the selection overlay on demand (tabs missing it)

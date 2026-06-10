@@ -103,11 +103,12 @@ async function showOverlay(tabId: number, mode: CaptureMode): Promise<boolean> {
   }
 }
 
-/** Inject the overlay content script on demand (path read from the built manifest). */
+/** Inject the overlay on demand. There is no declared content script (that would
+ * cost the all-sites install warning); the overlay is built to this fixed path
+ * (vite.config.ts) and injected only on user action, under activeTab or a
+ * per-site grant. */
 async function injectOverlay(tabId: number): Promise<void> {
-  const file = chrome.runtime.getManifest().content_scripts?.[0]?.js?.[0]
-  if (!file) throw new Error('overlay script not found in manifest')
-  await chrome.scripting.executeScript({ target: { tabId }, files: [file] })
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['content/overlay.js'] })
 }
 
 /** Best-effort tab origin (empty if we can't read it without permission). */
