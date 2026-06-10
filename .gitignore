@@ -10,6 +10,8 @@ scripts/ocr-bench/img/
 scripts/ocr-bench/cases.json
 .layout-probe/
 .mfr-probe/
+# Language packs downloaded by scripts/ocr-image-test.mjs
+.packs-cache/
 # Test images may be large / copyrighted / contain personal data — keep only the README.
 test-images/*
 !test-images/README.md

@@ -238,8 +238,11 @@ Testing:
 
 ```bash
 npm run ocr-bench                  # synthetic OCR benchmark (Node/CPU)
+npm run fetch-test-images          # populate test-images/ (Wikipedia per script, code, LaTeX)
 node scripts/ocr-image-test.mjs    # score real images in test-images/ vs ground truth
+                                   #   (a <lang>__ filename prefix picks the language pack)
 npm run verify                     # load the built extension in Chromium (Playwright)
+npm run verify:ux                  # end-to-end capture flow (Playwright)
 ```
 
 ---
