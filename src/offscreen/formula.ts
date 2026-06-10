@@ -20,22 +20,35 @@ const EOS = 2
 const MAX_TOKENS = 256
 const REPEAT_LIMIT = 12 // abort if one token repeats this many times in a row
 
-let encSession: ort.InferenceSession | null = null
-let decSession: ort.InferenceSession | null = null
+// Memoized as a promise so concurrent formula requests share ONE init.
+let sessionsPromise: Promise<[ort.InferenceSession, ort.InferenceSession]> | null = null
+// True when a session refused the WebGPU EP and was recreated WASM-only — so the
+// backend badge reports what actually ran, not just what the device supports.
+let wasmFallback = false
 
-async function getSessions(): Promise<[ort.InferenceSession, ort.InferenceSession]> {
-  if (encSession && decSession) return [encSession, decSession]
+/** True if formula inference fell back to the WASM-only path. */
+export const formulaUsedWasm = (): boolean => wasmFallback
+
+function getSessions(): Promise<[ort.InferenceSession, ort.InferenceSession]> {
+  sessionsPromise ??= buildSessions().catch((err) => {
+    sessionsPromise = null // failed init stays retryable
+    throw err
+  })
+  return sessionsPromise
+}
+
+async function buildSessions(): Promise<[ort.InferenceSession, ort.InferenceSession]> {
   const [encBuf, decBuf] = await Promise.all([
     (await fetch(chrome.runtime.getURL(ENCODER))).arrayBuffer(),
     (await fetch(chrome.runtime.getURL(DECODER))).arrayBuffer(),
   ])
   // int8 encoder may not run on the WebGPU EP → fall back to WASM (slower, fine).
   const create = (buf: ArrayBuffer) =>
-    ort.InferenceSession.create(buf, { executionProviders: ['webgpu', 'wasm'] }).catch(() =>
-      ort.InferenceSession.create(buf, { executionProviders: ['wasm'] }),
-    )
-  ;[encSession, decSession] = await Promise.all([create(encBuf), create(decBuf)])
-  return [encSession, decSession]
+    ort.InferenceSession.create(buf, { executionProviders: ['webgpu', 'wasm'] }).catch(() => {
+      wasmFallback = true
+      return ort.InferenceSession.create(buf, { executionProviders: ['wasm'] })
+    })
+  return Promise.all([create(encBuf), create(decBuf)])
 }
 
 // ── ByteLevel-BPE decode (id[] -> text) ──────────────────────────────────────

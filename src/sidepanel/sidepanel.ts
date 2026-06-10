@@ -10,11 +10,13 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import {
   LOW_CONFIDENCE,
+  PREFS_KEY,
   type CaptureMode,
   type DocBlock,
   type Message,
   type OcrResult,
   type OcrStage,
+  type PanelPrefs,
   type PermissionGranted,
   type Reprocess,
   type StartSelection,
@@ -60,14 +62,14 @@ function syncPicker(pick: HTMLElement, mode: CaptureMode) {
 }
 
 // Persist the last-used capture mode + Prose/Code view across panel opens.
-const PREFS_KEY = 'sidepanel.prefs'
+// (PREFS_KEY is shared: the SW reads it for the keyboard-shortcut mode.)
 function savePrefs() {
-  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode } })
+  void chrome.storage.local.set({ [PREFS_KEY]: { captureMode, codeMode } satisfies PanelPrefs })
 }
 async function restorePrefs() {
   try {
     const got = await chrome.storage.local.get(PREFS_KEY)
-    const p = got[PREFS_KEY] as { captureMode?: CaptureMode; codeMode?: boolean } | undefined
+    const p = got[PREFS_KEY] as PanelPrefs | undefined
     if (p?.captureMode === 'quick' || p?.captureMode === 'formula' || p?.captureMode === 'table') {
       captureMode = p.captureMode
     }
@@ -126,6 +128,13 @@ let needOrigin = ''
 
 let lastResult: OcrResult | null = null
 let codeMode = false
+// User edits to the prose view (contentEditable). Captured on input so a
+// Prose↔Code toggle doesn't silently discard them; reset on every new result.
+let editedProse: string | null = null
+
+textEl.addEventListener('input', () => {
+  if (lastResult?.mode === 'quick' && !codeMode) editedProse = textEl.textContent
+})
 
 // Per-stage label + progress %. `selecting` waits on the user (no spinner, no
 // skeleton — we show the drag hint instead).
@@ -254,6 +263,7 @@ void initBadge()
 
 function renderResult(r: OcrResult) {
   lastResult = r
+  editedProse = null
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
@@ -301,6 +311,15 @@ function renderText() {
   }
   textEl.classList.remove('hljs')
   textEl.contentEditable = 'true'
+
+  // The user edited this prose: render their text verbatim instead of rebuilding
+  // from words (which would discard the edits). Confidence underlines no longer
+  // map to the edited text, so they're dropped.
+  if (editedProse !== null) {
+    textEl.textContent = editedProse
+    uncertainSummary.hidden = true
+    return
+  }
 
   // Prose: per-word spans (confidence underlines), with line breaks taken from the
   // engine's line grouping (w.line) — exactly where the source text wraps.

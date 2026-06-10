@@ -9,7 +9,7 @@
 import * as ort from 'onnxruntime-web'
 import { PaddleOcrService, isWebGpuAvailable } from 'ppu-paddle-ocr/web'
 import type { RecognitionOptions, RecognitionResult } from 'ppu-paddle-ocr/web'
-import { recognizeFormula } from './formula'
+import { formulaUsedWasm, recognizeFormula } from './formula'
 import type { DocBlock, OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
@@ -45,22 +45,31 @@ export interface OcrOutput {
   lines: RecognitionResult[][]
 }
 
-let service: PaddleOcrService | null = null
+// Memoized as a promise so concurrent RUN_OCR calls share ONE init (a plain
+// instance check would let both build a service and load the models twice).
+let servicePromise: Promise<PaddleOcrService> | null = null
 let backend: 'webgpu' | 'wasm' = 'wasm'
 
 const fetchBuf = async (path: string): Promise<ArrayBuffer> =>
   (await fetch(chrome.runtime.getURL(path))).arrayBuffer()
 
 /** Build the engine once; reused across captures. */
-async function getService(): Promise<PaddleOcrService> {
-  if (service) return service
+function getService(): Promise<PaddleOcrService> {
+  servicePromise ??= buildService().catch((err) => {
+    servicePromise = null // failed init stays retryable on the next capture
+    throw err
+  })
+  return servicePromise
+}
+
+async function buildService(): Promise<PaddleOcrService> {
   const [detection, recognition, charactersDictionary] = await Promise.all([
     fetchBuf(MODELS.detection),
     fetchBuf(MODELS.recognition),
     fetchBuf(MODELS.charactersDictionary),
   ])
   backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
-  service = new PaddleOcrService({
+  const service = new PaddleOcrService({
     model: { detection, recognition, charactersDictionary },
     // per-box: recognize each detected box on its OWN crop. The default per-line
     // strategy merges a line's box crops side-by-side into one image, so adjacent
@@ -504,10 +513,11 @@ export async function recognizeTableImage(
 export async function recognizeFormulaImage(
   imageBuffer: ArrayBuffer,
 ): Promise<{ latex: string; ok: boolean; backend: 'webgpu' | 'wasm' }> {
-  // No PP-OCR service runs in this path, so resolve the backend label directly.
-  backend = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
   const bitmap = await createImageBitmap(new Blob([imageBuffer]))
   const r = await recognizeFormula(bitmap)
   bitmap.close()
+  // No PP-OCR service runs in this path; report what actually ran — WebGPU only
+  // if available AND the sessions didn't fall back to the WASM-only path.
+  backend = (await isWebGpuAvailable()) && !formulaUsedWasm() ? 'webgpu' : 'wasm'
   return { ...r, backend }
 }

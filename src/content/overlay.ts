@@ -3,12 +3,19 @@
 // full-page dimmer + drag rectangle; on mouseup sends the selected region
 // (CSS px + devicePixelRatio) to the SW, which captures & crops.
 
-import type { CaptureRequest, Message } from '../shared/messages'
+import type { CaptureMode, CaptureRequest, Message } from '../shared/messages'
 
 const OVERLAY_FLAG = '__ocrBuddyOverlay'
 
+// Mode for the in-flight selection, echoed back in CAPTURE_REQUEST so the
+// service worker stays stateless (it may be recycled while the user drags).
+let captureMode: CaptureMode = 'quick'
+
 chrome.runtime.onMessage.addListener((msg: Message) => {
-  if (msg.type === 'SHOW_OVERLAY') showOverlay()
+  if (msg.type === 'SHOW_OVERLAY') {
+    captureMode = msg.mode ?? 'quick'
+    showOverlay()
+  }
   return false
 })
 
@@ -118,6 +125,7 @@ function showOverlay() {
       rect: { x, y, width, height },
       devicePixelRatio: window.devicePixelRatio || 1,
       origin: window.location.origin,
+      mode: captureMode,
     }
     // Small delay lets the overlay removal paint before captureVisibleTab.
     setTimeout(() => chrome.runtime.sendMessage(capture), 50)

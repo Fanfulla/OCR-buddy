@@ -5,7 +5,8 @@
 //   3. Receive the selected rect → captureVisibleTab → crop on OffscreenCanvas.
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
-import type { CaptureMode, CaptureRequest, Message, RunOcr, ShowOverlay } from '../shared/messages'
+import { PREFS_KEY } from '../shared/messages'
+import type { CaptureMode, CaptureRequest, Message, PanelPrefs, RunOcr, ShowOverlay } from '../shared/messages'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 const V1_LANGS = ['en', 'it', 'fr', 'de', 'es'] // Latin + IT/EU (research §v1)
@@ -21,26 +22,25 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command !== 'start-capture' || tab?.id === undefined) return
   await chrome.sidePanel.open({ tabId: tab.id })
-  await startSelection(tab.id)
+  await startSelection(tab.id, await lastMode())
 })
 
 // The action to retry after the user grants per-site permission: either a
 // selection that couldn't start (overlay/host access) or a capture that failed.
-type Pending = { kind: 'select'; tabId: number } | { kind: 'capture'; req: CaptureRequest }
+// The capture mode itself is NOT held here: it rides inside SHOW_OVERLAY /
+// CAPTURE_REQUEST, so it survives the SW being recycled mid-selection.
+type Pending =
+  | { kind: 'select'; tabId: number; mode: CaptureMode }
+  | { kind: 'capture'; req: CaptureRequest }
 let pending: Pending | null = null
-
-// Capture mode chosen at selection time (quick OCR / document layout / formula).
-let captureMode: CaptureMode = 'quick'
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
   if (msg.type === 'START_SELECTION') {
-    captureMode = msg.mode ?? 'quick'
-    void startActiveTabSelection()
+    void startActiveTabSelection(msg.mode ?? 'quick')
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
   } else if (msg.type === 'REPROCESS') {
     // Reinterpret an already-captured crop in a different mode — no re-selection.
-    captureMode = msg.mode
     void reprocess(msg.imageDataUrl, msg.mode)
   } else if (msg.type === 'PERMISSION_GRANTED') {
     // The MV3 service worker can be recycled while the permission prompt is open,
@@ -48,29 +48,44 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     // a fresh selection on the active tab (now that host access is granted) so the
     // grant always leads somewhere.
     if (pending?.kind === 'capture') void handleCapture(pending.req)
-    else if (pending?.kind === 'select') void startSelection(pending.tabId)
-    else void startActiveTabSelection()
+    else if (pending?.kind === 'select') void startSelection(pending.tabId, pending.mode)
+    else void startActiveTabSelectionWithLastMode()
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
   // via broadcast — no relay needed here.
   return false
 })
 
+/** Last capture mode the user picked in the panel (persisted prefs), for entry
+ * points that don't carry one (keyboard shortcut, post-grant fallback). */
+async function lastMode(): Promise<CaptureMode> {
+  try {
+    const got = await chrome.storage.local.get(PREFS_KEY)
+    return (got[PREFS_KEY] as PanelPrefs | undefined)?.captureMode ?? 'quick'
+  } catch {
+    return 'quick'
+  }
+}
+
+async function startActiveTabSelectionWithLastMode(): Promise<void> {
+  await startActiveTabSelection(await lastMode())
+}
+
 /** Resolve the active tab, then start selection on it. */
-async function startActiveTabSelection(): Promise<void> {
+async function startActiveTabSelection(mode: CaptureMode): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
   if (tab?.id === undefined) return
-  await startSelection(tab.id)
+  await startSelection(tab.id, mode)
 }
 
 /** Show the overlay on a tab, injecting it first if the content script is absent.
  * If we lack host access, ask the user to grant capture for this site. */
-async function startSelection(tabId: number): Promise<void> {
-  pending = { kind: 'select', tabId }
-  if (await showOverlay(tabId)) return
+async function startSelection(tabId: number, mode: CaptureMode): Promise<void> {
+  pending = { kind: 'select', tabId, mode }
+  if (await showOverlay(tabId, mode)) return
   try {
     await injectOverlay(tabId) // needs host access (activeTab / granted host)
-    if (await showOverlay(tabId)) return
+    if (await showOverlay(tabId, mode)) return
   } catch {
     // injection blocked — fall through to the permission prompt
   }
@@ -78,9 +93,9 @@ async function startSelection(tabId: number): Promise<void> {
 }
 
 /** Tell the overlay (if present) to show; true on success. */
-async function showOverlay(tabId: number): Promise<boolean> {
+async function showOverlay(tabId: number, mode: CaptureMode): Promise<boolean> {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'SHOW_OVERLAY' } satisfies ShowOverlay)
+    await chrome.tabs.sendMessage(tabId, { type: 'SHOW_OVERLAY', mode } satisfies ShowOverlay)
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'selecting' })
     return true
   } catch {
@@ -125,7 +140,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
       type: 'RUN_OCR',
       imageDataUrl: cropDataUrl,
       langs: V1_LANGS,
-      mode: captureMode,
+      mode: req.mode,
     }
     await chrome.runtime.sendMessage(runMsg)
   } catch (err) {

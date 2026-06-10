@@ -25,6 +25,9 @@ export interface StartSelection {
 /** SW → content overlay: show the selection overlay on the page. */
 export interface ShowOverlay {
   type: 'SHOW_OVERLAY'
+  /** Echoed back in CAPTURE_REQUEST, so the mode survives an MV3 service-worker
+   *  restart between selection start and mouseup (no in-memory SW state). */
+  mode: CaptureMode
 }
 
 /** Content overlay → SW: user finished selecting a region (CSS px). */
@@ -34,6 +37,8 @@ export interface CaptureRequest {
   devicePixelRatio: number
   /** Page origin, so the SW can request per-site capture permission if needed. */
   origin: string
+  /** Capture mode chosen at selection time (echoed from SHOW_OVERLAY). */
+  mode: CaptureMode
 }
 
 /** SW → panel: capturing this tab needs the user to grant per-site permission. */
@@ -141,3 +146,12 @@ export type Message =
 
 /** Confidence below this is rendered as "uncertain" in the UI. */
 export const LOW_CONFIDENCE = 0.6
+
+/** Side-panel preferences persisted in chrome.storage.local. Shared so the
+ *  service worker can honour the last-used capture mode on the keyboard
+ *  shortcut path (the panel may not have broadcast a mode yet). */
+export const PREFS_KEY = 'sidepanel.prefs'
+export interface PanelPrefs {
+  captureMode?: CaptureMode
+  codeMode?: boolean
+}
