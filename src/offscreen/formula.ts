@@ -43,10 +43,15 @@ async function buildSessions(): Promise<[ort.InferenceSession, ort.InferenceSess
     (await fetch(chrome.runtime.getURL(DECODER))).arrayBuffer(),
   ])
   // int8 encoder may not run on the WebGPU EP → fall back to WASM (slower, fine).
+  // logSeverityLevel 3 = errors only — keeps ORT's benign EP-partition warnings
+  // off the chrome://extensions error page.
   const create = (buf: ArrayBuffer) =>
-    ort.InferenceSession.create(buf, { executionProviders: ['webgpu', 'wasm'] }).catch(() => {
+    ort.InferenceSession.create(buf, {
+      executionProviders: ['webgpu', 'wasm'],
+      logSeverityLevel: 3,
+    }).catch(() => {
       wasmFallback = true
-      return ort.InferenceSession.create(buf, { executionProviders: ['wasm'] })
+      return ort.InferenceSession.create(buf, { executionProviders: ['wasm'], logSeverityLevel: 3 })
     })
   return Promise.all([create(encBuf), create(decBuf)])
 }
@@ -98,7 +103,7 @@ function decodeIds(ids: number[]): string {
 // ── preprocessing (crop -> CHW float tensor), validated to ~1e-7 vs Transformers.js ──
 function preprocess(crop: ImageBitmap): ort.Tensor {
   const canvas = new OffscreenCanvas(SIZE, SIZE)
-  const ctx = canvas.getContext('2d')!
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
   ctx.drawImage(crop, 0, 0, SIZE, SIZE) // non-aspect square resize
   const px = ctx.getImageData(0, 0, SIZE, SIZE).data // RGBA
   const plane = SIZE * SIZE

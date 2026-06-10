@@ -101,6 +101,10 @@ async function buildService(
     detection: { maxSideLength: MAX_SIDE },
     // canvas-native avoids the OpenCV.js dependency — lighter and MV3-friendly.
     processing: { engine: 'canvas-native' },
+    // Errors only at the ORT SESSION level too: ort.env.logLevel covers the JS
+    // side, but the benign EP-partition warnings (VerifyEachNodeIsAssignedToAnEp)
+    // are emitted by the session and otherwise land on chrome://extensions.
+    session: { logSeverityLevel: 3 },
     // executionProviders are auto-resolved by the service (WebGPU → WASM).
   })
   await service.initialize()
@@ -116,7 +120,9 @@ async function prepareImage(imageBuffer: ArrayBuffer): Promise<OffscreenCanvas> 
   const w = Math.round(bitmap.width * scale)
   const h = Math.round(bitmap.height * scale)
   const canvas = new OffscreenCanvas(w, h)
-  const ctx = canvas.getContext('2d')!
+  // willReadFrequently: markUnreadGlyphs samples this canvas with getImageData
+  // per line gap — without the hint Chrome warns on chrome://extensions.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(bitmap, 0, 0, w, h)
