@@ -80,7 +80,7 @@
 
 <main>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: June 1, 2026</p>
+  <p class="updated">Last updated: June 10, 2026</p>
 
   <p class="lead">OCR Buddy runs entirely on your device. It has no servers, no accounts, and no telemetry. It does not collect, transmit, sell, or share any of your data — full stop.</p>
 
@@ -92,14 +92,15 @@
   <p>This policy applies to the <strong>OCR Buddy</strong> Chrome extension and the website <a href="https://ocr-buddy.com">ocr-buddy.com</a>. OCR Buddy is free, open-source software released under the MIT license; its full source is on <a href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener">GitHub</a>.</p>
 
   <h2>2. What the extension processes</h2>
-  <p>When you select a region of a page, OCR Buddy captures an image of that region and recognizes the text in it. This happens <strong>entirely on your device</strong>, in memory, using OCR models bundled inside the extension. The captured image and the extracted text are <strong>not stored, not logged, and not transmitted anywhere</strong>. They exist only for as long as the result is shown in the side panel.</p>
+  <p>When you select a region of a page (or open, paste, drop, or right-click an image), OCR Buddy captures that image and recognizes the text in it. This happens <strong>entirely on your device</strong>, using OCR models running locally inside the extension. Nothing is <strong>ever logged or transmitted anywhere</strong>. If the optional capture history is enabled (it can be turned off or cleared in the panel at any time), the last 20 captures and their results are kept in the extension's local storage on your device — and nowhere else.</p>
 
   <table>
     <thead><tr><th>Data</th><th>Where it goes</th><th>Stored?</th></tr></thead>
     <tbody>
-      <tr><td>Captured screen region (image)</td><td>Processed locally, in memory</td><td>No</td></tr>
-      <tr><td>Recognized text / LaTeX / Markdown</td><td>Shown to you in the side panel; copied only when you click Copy</td><td>No</td></tr>
-      <tr><td>Your settings (capture mode, Prose/Code view)</td><td>Saved locally via <code>chrome.storage.local</code> on your device</td><td>Locally only</td></tr>
+      <tr><td>Captured screen region (image)</td><td>Processed locally, in memory</td><td>Only if history is on — locally only</td></tr>
+      <tr><td>Recognized text / LaTeX / Markdown</td><td>Shown to you in the side panel; copied only when you click Copy</td><td>Only if history is on — locally only</td></tr>
+      <tr><td>Capture history (last 20 captures + results)</td><td>Saved locally via <code>chrome.storage.local</code>; you can turn it off or clear it in the panel at any time</td><td>Locally only</td></tr>
+      <tr><td>Your settings (capture mode, language, Prose/Code view)</td><td>Saved locally via <code>chrome.storage.local</code> on your device</td><td>Locally only</td></tr>
     </tbody>
   </table>
 
@@ -107,7 +108,7 @@
   <p><strong>Nothing.</strong> OCR Buddy has no analytics, no tracking, no cookies, no accounts, and no remote server. We never see what you capture, and we have no way to.</p>
 
   <h2>4. Network use</h2>
-  <p>OCR Buddy performs OCR with <strong>no network connection at all</strong> — the models ship inside the extension, so it works fully offline. The only network activity is Chrome downloading the extension (and its updates) from the Chrome Web Store, which is governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's privacy policy</a>, not ours.</p>
+  <p>OCR Buddy performs OCR with <strong>no network connection at all</strong> — the bundled models ship inside the extension, so the default experience works fully offline. There are exactly two network activities, neither of which carries any of your data: Chrome downloading the extension (and its updates) from the Chrome Web Store, governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's privacy policy</a>; and, <strong>only if you explicitly select a non-Latin language pack</strong>, a one-time download of that model file from the pinned open-source model repository on GitHub. The request contains nothing but the file URL — no page content, no images, no identifiers from the extension — and the file is cached locally so it is never fetched again.</p>
 
   <h2>5. Permissions and why they are needed</h2>
   <ul>
@@ -115,7 +116,8 @@
     <li><strong>scripting</strong> — to draw the selection overlay on the page when you start a capture.</li>
     <li><strong>offscreen</strong> — to run the OCR model in a background document, off the service worker.</li>
     <li><strong>sidePanel</strong> — to show the result in Chrome's side panel.</li>
-    <li><strong>storage / unlimitedStorage</strong> — to remember your settings and to cache the bundled OCR model files on your device.</li>
+    <li><strong>storage / unlimitedStorage</strong> — to remember your settings, your local capture history (if enabled), and to cache OCR model files on your device.</li>
+    <li><strong>contextMenus</strong> — to offer "OCR this image" when you right-click an image. The image is processed locally like any capture.</li>
     <li><strong>Optional site access</strong> — requested per-site, at the moment you try to capture a tab you didn't invoke OCR Buddy on. The screenshot is gated behind your explicit consent.</li>
   </ul>
   <p>None of these permissions are used to collect or send data off your device.</p>

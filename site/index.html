@@ -42,6 +42,7 @@
   "applicationCategory": "BrowserApplication",
   "operatingSystem": "Chrome 124+",
   "url": "https://ocr-buddy.com/",
+  "installUrl": "https://chromewebstore.google.com/detail/hfbghdhendbnblgnjgkfmpgokiiddlhj",
   "image": "https://ocr-buddy.com/assets/og-image.png",
   "description": "A faithful, fully-local OCR extension for Chrome. Select any region of your screen and get back text, code, LaTeX formulas or Markdown tables — recognized on your device with no server and no hallucinated text.",
   "license": "https://opensource.org/licenses/MIT",
@@ -52,6 +53,9 @@
     "Text & Code mode with layout-faithful reconstruction",
     "Formula mode: one equation to LaTeX, rendered beside the source crop",
     "Table mode: one table to a Markdown grid (handles borderless tables)",
+    "11 language packs: Latin built in; Chinese+Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil, Telugu on demand",
+    "OCR any image: open, paste, drag-drop, or right-click an image on a page",
+    "Capture history stored only on your device",
     "Per-word confidence — low-confidence words are flagged, never invented",
     "WebGPU acceleration with multi-threaded WASM fallback"
   ]
@@ -63,11 +67,11 @@
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {"@type":"Question","name":"Does my data ever leave my device?","acceptedAnswer":{"@type":"Answer","text":"No. There is no server and no API calls. The OCR models are bundled in the extension and run entirely on your device, so even the first run is fully offline. The only network use is downloading the extension itself from the store."}},
+    {"@type":"Question","name":"Does my data ever leave my device?","acceptedAnswer":{"@type":"Answer","text":"No. There is no server and no API calls. The OCR models are bundled in the extension and run entirely on your device, so even the first run is fully offline. The only network use is downloading the extension itself — and, only if you explicitly pick a non-Latin language pack, a one-time download of that model file, which is then cached locally. No page content or image ever rides along."}},
     {"@type":"Question","name":"Is OCR Buddy free?","acceptedAnswer":{"@type":"Answer","text":"Yes. OCR Buddy is free and open source under the MIT license. There is no account, no subscription and no telemetry."}},
     {"@type":"Question","name":"Why not use a large AI vision model for OCR?","acceptedAnswer":{"@type":"Answer","text":"Large generative OCR models predict the next likely token, so when the image is unclear they invent fluent but wrong text. OCR Buddy uses the classic detection plus CTC-recognition family, which transcribes the glyphs that are actually present and fails to blanks or low-confidence output instead of fabricating a sentence."}},
-    {"@type":"Question","name":"What can OCR Buddy read?","acceptedAnswer":{"@type":"Answer","text":"Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — including borderless tables."}},
-    {"@type":"Question","name":"Does it work offline?","acceptedAnswer":{"@type":"Answer","text":"Yes. The models ship inside the extension, so OCR Buddy works with no network connection at all."}},
+    {"@type":"Question","name":"What can OCR Buddy read?","acceptedAnswer":{"@type":"Answer","text":"Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — including borderless tables. Latin scripts are built in; on-demand language packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly: open, paste, drag-drop, or right-click it on a page."}},
+    {"@type":"Question","name":"Does it work offline?","acceptedAnswer":{"@type":"Answer","text":"Yes. The bundled models ship inside the extension, so the default Latin experience works with no network connection at all. Optional non-Latin language packs are downloaded once when you select them and cached locally — offline from then on."}},
     {"@type":"Question","name":"Which browsers are supported?","acceptedAnswer":{"@type":"Answer","text":"Chrome 124 or newer, which provides WebGPU in workers. On devices without WebGPU it falls back to multi-threaded WebAssembly with identical results."}}
   ]
 }
@@ -408,7 +412,7 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.48l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.59.69.48A10.03 10.03 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>
         <span>GitHub</span>
       </a>
-      <a class="btn btn-primary btn-sm" href="#cta">
+      <a class="btn btn-primary btn-sm" href="https://chromewebstore.google.com/detail/hfbghdhendbnblgnjgkfmpgokiiddlhj" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 7.8 4.5H12"/><path d="M7.8 19.5 12 12"/><circle cx="12" cy="12" r="3"/></svg>
         Add to Chrome
       </a>
@@ -424,7 +428,7 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
       <h1>Grab text from <span class="accent">anything</span> on screen.</h1>
       <p class="lede">Select any region of a page — a code block, a paragraph, a formula, a table — and OCR Buddy reads it locally. It shows you the source, flags what it isn't sure about, and never sends a pixel to a server.</p>
       <div class="hero-cta">
-        <a class="btn btn-primary" href="#cta">
+        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/hfbghdhendbnblgnjgkfmpgokiiddlhj" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 7.8 4.5H12"/><path d="M7.8 19.5 12 12"/><circle cx="12" cy="12" r="3"/></svg>
           Add to Chrome — free
         </a>
@@ -710,10 +714,10 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
       <div class="f-copy">
         <div class="sec-tag">Private by architecture</div>
         <h3 class="f-title">Nothing leaves your device.</h3>
-        <p class="f-text">There is no server. The OCR models are bundled in the extension and run in an offscreen worker, so even first-run inference is fully offline. The only network use is downloading the extension itself.</p>
+        <p class="f-text">There is no server. The OCR models are bundled in the extension and run in an offscreen worker, so even first-run inference is fully offline. The only network use is downloading the extension itself — and, only if you explicitly pick a non-Latin language pack, a one-time model download that's cached locally (no page content or image ever rides along).</p>
         <ul class="f-list">
           <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> No servers, no API calls, no telemetry</li>
-          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Models bundled — works fully offline</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Models bundled — works fully offline (optional language packs cached after one download)</li>
           <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Screenshot permission requested explicitly, per-site, only when needed</li>
         </ul>
       </div>
@@ -754,6 +758,7 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
         <tr><td class="mn"><code>PP-OCRv5 mobile det</code> · ~4.7 MB</td><td>Text detection</td><td class="lic">Apache-2.0</td></tr>
         <tr><td class="mn"><code>latin PP-OCRv5 rec</code> · ~8 MB</td><td>Latin text recognition (CTC)</td><td class="lic">Apache-2.0</td></tr>
         <tr><td class="mn"><code>mfr_encoder / decoder</code> · ~53 MB</td><td>Formula → LaTeX (pix2text-mfr)</td><td class="lic">MIT</td></tr>
+        <tr><td class="mn">Language packs · ~8–17 MB each</td><td>On-demand recognition: zh+ja, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil, Telugu — downloaded once, cached locally</td><td class="lic">Apache-2.0</td></tr>
       </tbody>
     </table>
     <div class="stack">
@@ -778,7 +783,7 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
     <div class="faq reveal">
       <details class="faq-item" name="faq" open>
         <summary><span class="q">Does my data ever leave my device?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
-        <p>No. There's no server and no API calls. The OCR models are bundled in the extension and run entirely on your device — even the first run is fully offline. The only network use is downloading the extension itself.</p>
+        <p>No. There's no server and no API calls. The OCR models are bundled in the extension and run entirely on your device — even the first run is fully offline. The only network use is downloading the extension itself — and, only if you explicitly pick a non-Latin language pack, a one-time model download that's cached locally. No page content or image ever rides along.</p>
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">Is it really free?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
@@ -790,11 +795,11 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">What can it read?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
-        <p>Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — borderless tables included.</p>
+        <p>Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — borderless tables included. Latin scripts are built in; on-demand packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly — open, paste, drag-drop, or right-click it on a page.</p>
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">Does it work offline?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
-        <p>Yes. The models ship inside the extension, so OCR Buddy works with no network connection at all.</p>
+        <p>Yes. The bundled models ship inside the extension, so the default Latin experience works with no network connection at all. Optional non-Latin language packs download once when you select them and are cached locally — offline from then on.</p>
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">Which browsers are supported?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
@@ -809,7 +814,7 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
   <div class="wrap cta-in reveal">
     <h2>Ready to read anything?</h2>
     <p>Add OCR Buddy to Chrome and pull clean text off any screen in seconds.</p>
-    <a class="btn btn-primary" href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener" style="padding:15px 28px;font-size:16px">
+    <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/hfbghdhendbnblgnjgkfmpgokiiddlhj" target="_blank" rel="noopener" style="padding:15px 28px;font-size:16px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 7.8 4.5H12"/><path d="M7.8 19.5 12 12"/><circle cx="12" cy="12" r="3"/></svg>
       Add to Chrome — free
     </a>
