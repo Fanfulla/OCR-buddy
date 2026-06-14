@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Privacy Policy — OCR Buddy</title>
-<meta name="description" content="OCR Buddy's privacy policy. OCR Buddy runs entirely on your device: it collects nothing, transmits nothing, and has no servers, accounts, or telemetry." />
+<meta name="description" content="OCR Buddy's privacy policy. The extension runs entirely on your device and collects nothing; the website uses only privacy-friendly, cookieless analytics, which you can opt out of." />
 <meta name="robots" content="index, follow" />
 <meta name="theme-color" content="#121216" />
 <link rel="canonical" href="https://ocr-buddy.com/privacy" />
@@ -80,9 +80,9 @@
 
 <main>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: June 10, 2026</p>
+  <p class="updated">Last updated: June 14, 2026</p>
 
-  <p class="lead">OCR Buddy runs entirely on your device. It has no servers, no accounts, and no telemetry. It does not collect, transmit, sell, or share any of your data — full stop.</p>
+  <p class="lead">The OCR Buddy extension runs entirely on your device: no servers, no accounts, no telemetry. It does not collect, transmit, sell, or share any of your data. The website (ocr-buddy.com) uses one privacy-friendly, <strong>cookieless</strong> analytics service for aggregate visit counts — and you can opt out. Details in <a href="#analytics">§4</a>.</p>
 
   <div class="callout ok">
     <strong>The short version:</strong> the image region you capture and the text it produces never leave your computer. There is nothing to upload because there is nowhere to upload it to.
@@ -105,12 +105,23 @@
   </table>
 
   <h2>3. What we collect</h2>
-  <p><strong>Nothing.</strong> OCR Buddy has no analytics, no tracking, no cookies, no accounts, and no remote server. We never see what you capture, and we have no way to.</p>
+  <p><strong>The extension: nothing.</strong> The OCR Buddy browser extension has no analytics, no tracking, no cookies, no account, and no remote server. We never see what you capture, and we have no way to.</p>
+  <p><strong>The website: cookieless analytics only.</strong> ocr-buddy.com uses a privacy-friendly, cookieless analytics service for aggregate visit counts — no cookies and no personal data, and you can opt out. Details in <a href="#analytics">§4, Website analytics</a>.</p>
 
-  <h2>4. Network use</h2>
+  <h2 id="analytics">4. Website analytics</h2>
+  <p>This website (<a href="https://ocr-buddy.com">ocr-buddy.com</a>) uses <strong>Vercel Web Analytics</strong>, a privacy-friendly, <strong>cookieless</strong> service, to count page views and see which pages and links people find useful. It is the only third-party service the site uses, and it applies to the <strong>website only</strong> — the OCR Buddy extension contains no analytics and never connects to it.</p>
+  <ul>
+    <li><strong>No cookies and no tracking storage.</strong> Nothing is written to your device to identify you across visits.</li>
+    <li><strong>Aggregate, non-identifying data only:</strong> page views, the referring site, and coarse details such as country, device type, operating system and browser. It is not used to build a profile of you.</li>
+    <li><strong>No stored identifiers.</strong> Visitors are counted with a hash that Vercel derives from request data and rotates daily; your IP address is not stored.</li>
+    <li><strong>You can opt out.</strong> Use the “Opt out” button in the notice at the bottom of the page. Your choice is kept locally and stops analytics from loading on the pages you visit afterwards.</li>
+  </ul>
+  <p>Vercel processes this data as our service provider; see <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Vercel's privacy policy</a> and its <a href="https://vercel.com/docs/analytics/privacy-policy" target="_blank" rel="noopener">analytics privacy notice</a>. Because the analytics are cookieless and collect no personal data, no consent banner is legally required; we show the notice and offer opt-out anyway, to stay upfront.</p>
+
+  <h2>5. Network use</h2>
   <p>OCR Buddy performs OCR with <strong>no network connection at all</strong> — the bundled models ship inside the extension, so the default experience works fully offline. There are exactly two network activities, neither of which carries any of your data: Chrome downloading the extension (and its updates) from the Chrome Web Store, governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's privacy policy</a>; and, <strong>only if you explicitly select a non-Latin language pack</strong>, a one-time download of that model file from the pinned open-source model repository on GitHub. The request contains nothing but the file URL — no page content, no images, no identifiers from the extension — and the file is cached locally so it is never fetched again.</p>
 
-  <h2>5. Permissions and why they are needed</h2>
+  <h2>6. Permissions and why they are needed</h2>
   <ul>
     <li><strong>activeTab</strong> — to screenshot the visible tab where you start a capture, only after you act.</li>
     <li><strong>scripting</strong> — to draw the selection overlay on the page when you start a capture.</li>
@@ -122,16 +133,16 @@
   </ul>
   <p>None of these permissions are used to collect or send data off your device.</p>
 
-  <h2>6. Data sharing</h2>
-  <p>We do not share, sell, rent, or transfer any user data to anyone, because we do not collect any.</p>
+  <h2>7. Data sharing</h2>
+  <p>We do not sell, rent, trade, or share your personal data with anyone. The only third party involved is <strong>Vercel</strong>, which hosts the website and provides the cookieless analytics described in <a href="#analytics">§4</a>, acting as our service provider. The extension shares nothing, because it collects nothing.</p>
 
-  <h2>7. Children</h2>
+  <h2>8. Children</h2>
   <p>OCR Buddy is a general-purpose utility and is not directed at children under 13. It collects no personal information from anyone.</p>
 
-  <h2>8. Changes to this policy</h2>
+  <h2>9. Changes to this policy</h2>
   <p>If this policy changes, the updated version will be posted at this URL with a new "Last updated" date. Material changes will be noted in the extension's release notes on GitHub.</p>
 
-  <h2>9. Contact</h2>
+  <h2>10. Contact</h2>
   <p>Questions about privacy? Open an issue on <a href="https://github.com/Fanfulla/ocr-buddy/issues" target="_blank" rel="noopener">GitHub</a> or email <a href="mailto:contact@ocr-buddy.com">contact@ocr-buddy.com</a>.</p>
 </main>
 
@@ -139,5 +150,6 @@
   <a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener">GitHub</a>
   <div style="margin-top:10px">OCR Buddy — faithful, fully-local OCR for Chrome. MIT licensed.</div>
 </footer>
+<script defer src="assets/analytics.js"></script>
 </body>
 </html>
