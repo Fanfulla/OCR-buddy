@@ -3,7 +3,8 @@
 // (ppu-paddle-ocr / PP-OCRv5) here directly — no separate worker for v1.
 
 import { recognizeBuffer, recognizeFormulaImage, recognizeTableImage } from './engine'
-import type { Message, OcrResult, OcrStatus, RunOcr } from '../shared/messages'
+import { mergeTiles } from '../background/merge-tiles'
+import type { Message, OcrResult, OcrStatus, RunOcr, RunOcrTiles } from '../shared/messages'
 
 if (!crossOriginIsolated) {
   console.warn('[OCR Buddy] offscreen not cross-origin isolated — WASM threads disabled')
@@ -88,7 +89,45 @@ async function run(req: RunOcr): Promise<void> {
   }
 }
 
+async function runTiles(req: RunOcrTiles): Promise<void> {
+  try {
+    post({ type: 'OCR_STATUS', stage: 'loading-model' })
+    const n = req.imageDataUrls.length
+    const texts: string[] = []
+    let backend: 'webgpu' | 'wasm' = 'wasm'
+    for (let i = 0; i < n; i++) {
+      post({ type: 'OCR_STATUS', stage: 'recognizing', progress: n ? i / n : 0 })
+      const buf = await (await fetch(req.imageDataUrls[i])).arrayBuffer()
+      const out = await recognizeBuffer(buf, req.lang)
+      texts.push(out.text)
+      backend = out.backend
+    }
+    const merged = mergeTiles(texts)
+    post({ type: 'OCR_STATUS', stage: 'done' })
+    post({
+      type: 'OCR_RESULT',
+      mode: 'quick',
+      text: merged,
+      codeText: merged, // no cross-tile code geometry; prose serves both views
+      words: [], // merged from independent tiles — no global word boxes
+      backend,
+      imageDataUrl: req.imageDataUrls[0] ?? '',
+      empty: merged.trim() === '',
+      note: req.truncated === true
+        ? 'Full page was long — capture stopped at the tile limit; the bottom may be missing.'
+        : undefined,
+    })
+  } catch (err) {
+    post({
+      type: 'OCR_STATUS',
+      stage: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'RUN_OCR') void run(msg)
+  else if (msg.type === 'RUN_OCR_TILES') void runTiles(msg)
   return false
 })
