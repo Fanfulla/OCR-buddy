@@ -98,9 +98,17 @@ async function runTiles(req: RunOcrTiles): Promise<void> {
     for (let i = 0; i < n; i++) {
       post({ type: 'OCR_STATUS', stage: 'recognizing', progress: n ? i / n : 0 })
       const buf = await (await fetch(req.imageDataUrls[i])).arrayBuffer()
-      const out = await recognizeBuffer(buf, req.lang)
+      const onDownload = i === 0
+        ? (p: number) =>
+            post(
+              p < 1
+                ? { type: 'OCR_STATUS', stage: 'loading-model', progress: p }
+                : { type: 'OCR_STATUS', stage: 'recognizing' },
+            )
+        : undefined
+      const out = await recognizeBuffer(buf, req.lang, onDownload)
       texts.push(out.text)
-      backend = out.backend
+      backend = out.backend // all tiles share the same session backend
     }
     const merged = mergeTiles(texts)
     post({ type: 'OCR_STATUS', stage: 'done' })
@@ -111,7 +119,7 @@ async function runTiles(req: RunOcrTiles): Promise<void> {
       codeText: merged, // no cross-tile code geometry; prose serves both views
       words: [], // merged from independent tiles — no global word boxes
       backend,
-      imageDataUrl: req.imageDataUrls[0] ?? '',
+      imageDataUrl: req.imageDataUrls[0] ?? '', // panel source preview shows the first tile (top of page); no stitched full-page image exists
       empty: merged.trim() === '',
       note: req.truncated === true
         ? 'Full page was long — capture stopped at the tile limit; the bottom may be missing.'
