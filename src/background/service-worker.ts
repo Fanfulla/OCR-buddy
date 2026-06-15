@@ -6,7 +6,7 @@
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import { PREFS_KEY } from '../shared/messages'
-import type { CaptureMode, CaptureRequest, Message, PanelPrefs, RunOcr, ShowOverlay } from '../shared/messages'
+import type { CaptureMode, CaptureRequest, CaptureViewport, Message, PanelPrefs, RunOcr, ShowOverlay } from '../shared/messages'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 
@@ -76,6 +76,8 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     void startActiveTabSelection(msg.mode ?? 'quick')
   } else if (msg.type === 'CAPTURE_REQUEST') {
     void handleCapture(msg)
+  } else if (msg.type === 'CAPTURE_VIEWPORT') {
+    void handleViewport(msg)
   } else if (msg.type === 'REPROCESS') {
     // Reinterpret an already-captured crop in a different mode — no re-selection.
     void reprocess(msg.imageDataUrl, msg.mode)
@@ -190,6 +192,29 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
     // for this site (runtime, per-origin), then retry.
     if (/activeTab|all_urls|permission/i.test(message)) {
       chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: req.origin })
+    } else {
+      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
+    }
+  }
+}
+
+/** Capture the whole visible viewport (no region selection) and OCR it. */
+async function handleViewport(msg: CaptureViewport): Promise<void> {
+  try {
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
+    await ensureOffscreen()
+    const runMsg: RunOcr = {
+      type: 'RUN_OCR',
+      imageDataUrl: dataUrl,
+      lang: (await panelPrefs()).lang,
+      mode: msg.mode,
+    }
+    await chrome.runtime.sendMessage(runMsg)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (/activeTab|all_urls|permission/i.test(message)) {
+      chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: msg.origin })
     } else {
       chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
     }
