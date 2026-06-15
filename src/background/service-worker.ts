@@ -6,7 +6,8 @@
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import { PREFS_KEY } from '../shared/messages'
-import type { CaptureMode, CaptureRequest, CaptureViewport, Message, PanelPrefs, RunOcr, ShowOverlay } from '../shared/messages'
+import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, Message, PanelPrefs, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
+import { captureFullPage } from './fullpage'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 
@@ -70,6 +71,7 @@ type Pending =
   | { kind: 'select'; tabId: number; mode: CaptureMode }
   | { kind: 'capture'; req: CaptureRequest }
   | { kind: 'viewport'; msg: CaptureViewport }
+  | { kind: 'fullpage'; msg: CaptureFullPage }
 let pending: Pending | null = null
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
@@ -79,6 +81,8 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     void handleCapture(msg)
   } else if (msg.type === 'CAPTURE_VIEWPORT') {
     void handleViewport(msg)
+  } else if (msg.type === 'CAPTURE_FULLPAGE') {
+    void handleFullPage(msg)
   } else if (msg.type === 'REPROCESS') {
     // Reinterpret an already-captured crop in a different mode — no re-selection.
     void reprocess(msg.imageDataUrl, msg.mode)
@@ -90,6 +94,7 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     if (pending?.kind === 'capture') void handleCapture(pending.req)
     else if (pending?.kind === 'select') void startSelection(pending.tabId, pending.mode)
     else if (pending?.kind === 'viewport') void handleViewport(pending.msg)
+    else if (pending?.kind === 'fullpage') void handleFullPage(pending.msg)
     else void startActiveTabSelectionWithLastMode()
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
@@ -171,6 +176,16 @@ async function reprocess(imageDataUrl: string, mode: CaptureMode): Promise<void>
   await chrome.runtime.sendMessage({ type: 'RUN_OCR', imageDataUrl, lang, mode } satisfies RunOcr)
 }
 
+/** Post NEED_PERMISSION for a missing host/activeTab grant, else surface the error. */
+function postCaptureError(err: unknown, origin: string): void {
+  const message = err instanceof Error ? err.message : String(err)
+  if (/activeTab|all_urls|permission|cannot be scripted|Cannot access/i.test(message)) {
+    chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin })
+  } else {
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
+  }
+}
+
 async function handleCapture(req: CaptureRequest): Promise<void> {
   pending = { kind: 'capture', req }
   try {
@@ -189,14 +204,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
     }
     await chrome.runtime.sendMessage(runMsg)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    // Missing host/activeTab permission for this tab → ask the user to grant it
-    // for this site (runtime, per-origin), then retry.
-    if (/activeTab|all_urls|permission/i.test(message)) {
-      chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: req.origin })
-    } else {
-      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
-    }
+    postCaptureError(err, req.origin)
   }
 }
 
@@ -215,12 +223,38 @@ async function handleViewport(msg: CaptureViewport): Promise<void> {
     }
     await chrome.runtime.sendMessage(runMsg)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (/activeTab|all_urls|permission/i.test(message)) {
-      chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: msg.origin })
-    } else {
-      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
+    postCaptureError(err, msg.origin)
+  }
+}
+
+/** Capture the full scrollable page, then hand the tiles to the offscreen doc. */
+async function handleFullPage(msg: CaptureFullPage): Promise<void> {
+  pending = { kind: 'fullpage', msg }
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    if (tab?.id === undefined) return
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    const { tiles, truncated } = await captureFullPage(tab.id, (t) =>
+      chrome.runtime.sendMessage({
+        type: 'OCR_STATUS',
+        stage: 'capturing',
+        message: `Capturing page… tile ${t}`,
+      }),
+    )
+    if (!tiles.length) {
+      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'Nothing to capture on this page.' })
+      return
     }
+    await ensureOffscreen()
+    const runMsg: RunOcrTiles = {
+      type: 'RUN_OCR_TILES',
+      imageDataUrls: tiles,
+      lang: (await panelPrefs()).lang,
+      truncated,
+    }
+    await chrome.runtime.sendMessage(runMsg)
+  } catch (err) {
+    postCaptureError(err, msg.origin)
   }
 }
 
