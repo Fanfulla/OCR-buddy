@@ -198,9 +198,26 @@ removed, on purpose:
   assumes a KV-cache decoder this model doesn't export, which silently corrupted the
   output. It would also have bundled a *second* copy of the ONNX runtime. Hand-rolling
   the decode on the runtime I already ship was both correct and lighter.
+- **An auto-fix for the pipe `\|` → `I`/`l` confusion.** A lone vertical bar is
+  visually identical to capital-I, lowercase-L and the digit 1; the recognizer
+  (favouring letters) usually picks one of those, so pipes in code and tables read as
+  `I`. The tempting fix — fold a standalone `I`/`l` back to `\|` — was dropped because
+  the glyphs are *genuinely* ambiguous (especially in monospace, where their boxes are
+  identical width), so any rule that catches real pipes also corrupts real `I`/`l`/`1`.
+  Turning someone's variable `l` into `\|` is exactly the silent corruption this tool
+  refuses to make. A visible, correctable `I` beats an invented `\|`.
 
 Keeping these out is part of the design: a small, honest tool beats a broad,
 flaky one.
+
+One thing that **did** ship from this round of testing: **coloured text on light
+backgrounds** (a red form error, a blue link) used to be dropped at detection — the
+detector is tuned for dark, high-contrast glyphs. A background-adaptive contrast
+boost (collapse each pixel to its darkest channel on light backgrounds) pulls weak
+colour contrast up to strong luminance contrast, with no effect on ordinary
+dark-on-light text or on dark mode. Emoji remain best-effort: an undetected one is
+marked with a `□` placeholder, but one the recognizer boxes anyway can still come out
+as garbage — a Latin model has no glyph for it.
 
 ---
 
