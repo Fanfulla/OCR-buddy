@@ -111,6 +111,42 @@ async function buildService(
   return service
 }
 
+const luma = (r: number, g: number, b: number): number => 0.299 * r + 0.587 * g + 0.114 * b
+
+/**
+ * Boost coloured text on a light background so detection sees it. PP-OCRv5's
+ * detector is tuned for dark, high-luminance-contrast text; coloured text (a red
+ * validation error, a blue link) has weak luminance contrast against white and is
+ * dropped at detection before recognition ever runs.
+ *
+ * Fix: on a LIGHT background, replace each pixel with its min RGB channel. White
+ * (255,255,255)→255 and black (0,0,0)→0 are untouched, so ordinary dark-on-light
+ * text is unchanged — but a saturated colour collapses to its darkest channel
+ * (red 220,40,40 → 40), turning weak colour contrast into strong luminance
+ * contrast. Dark backgrounds (dark mode, which already works) are left alone, so
+ * there's no regression there.
+ */
+function boostColoredText(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number): void {
+  const img = ctx.getImageData(0, 0, w, h)
+  const d = img.data
+  // Estimate background lightness from a strided sample of the border rows/cols.
+  let sum = 0
+  let n = 0
+  const step = Math.max(1, Math.round(w / 64))
+  for (let x = 0; x < w; x += step) {
+    const top = (x) * 4
+    const bot = ((h - 1) * w + x) * 4
+    sum += luma(d[top], d[top + 1], d[top + 2]) + luma(d[bot], d[bot + 1], d[bot + 2])
+    n += 2
+  }
+  if (n === 0 || sum / n < 140) return // dark/medium background → leave untouched
+  for (let i = 0; i < d.length; i += 4) {
+    const m = d[i] < d[i + 1] ? (d[i] < d[i + 2] ? d[i] : d[i + 2]) : (d[i + 1] < d[i + 2] ? d[i + 1] : d[i + 2])
+    d[i] = d[i + 1] = d[i + 2] = m
+  }
+  ctx.putImageData(img, 0, 0)
+}
+
 /** Decode + smart-upscale small crops. Returns a canvas ready for recognition. */
 async function prepareImage(imageBuffer: ArrayBuffer): Promise<OffscreenCanvas> {
   const bitmap = await createImageBitmap(new Blob([imageBuffer]))
@@ -127,6 +163,9 @@ async function prepareImage(imageBuffer: ArrayBuffer): Promise<OffscreenCanvas> 
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(bitmap, 0, 0, w, h)
   bitmap.close()
+  // Pull weak-contrast coloured text up to strong luminance contrast (no-op on
+  // dark backgrounds and on already dark-on-light text).
+  boostColoredText(ctx, w, h)
   // NOTE: box coords below are in this (possibly upscaled) space. Indent math is
   // relative so scale cancels; divide by `scale` only if overlaying on the crop.
   return canvas
