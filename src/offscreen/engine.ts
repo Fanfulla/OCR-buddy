@@ -372,7 +372,14 @@ export async function recognizeBuffer(
 ): Promise<OcrOutput> {
   const svc = await getService(lang, onProgress)
   const canvas = await prepareImage(imageBuffer)
-  const res = await svc.recognize(canvas, { flatten: false })
+  // noCache: ppu keys its result cache on a hash of the first 1024 bytes of the
+  // raw RGBA (the top-left ~256 px) plus the pixel count. Two different captures
+  // of the same size with an identical top-left region (white margins, a shared
+  // toolbar, blank tiles) collide on that key and silently return the FIRST
+  // capture's text. That's a faithfulness bug (wrong text, no signal), and it
+  // breaks full-page capture outright (every same-size tile collides). We OCR each
+  // image exactly once anyway, so the cache only ever hurts us — disable it.
+  const res = await svc.recognize(canvas, { flatten: false, noCache: true })
 
   // Latin-script packs only: fold stray Greek/Cyrillic look-alikes back to
   // Latin, and a digit-context 'o'→'0' (e.g. "4o0" → "400"). For non-Latin
