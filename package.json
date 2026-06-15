@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "verify:ux": "node scripts/verify-ux.mjs",
+    "test:merge": "node --experimental-strip-types scripts/test-merge.ts",
     "ocr-bench": "node scripts/ocr-bench.mjs",
     "fetch-test-images": "node scripts/fetch-test-images.mjs"
   },
