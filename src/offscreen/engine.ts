@@ -147,8 +147,10 @@ function boostColoredText(ctx: OffscreenCanvasRenderingContext2D, w: number, h: 
   ctx.putImageData(img, 0, 0)
 }
 
-/** Decode + smart-upscale small crops. Returns a canvas ready for recognition. */
-async function prepareImage(imageBuffer: ArrayBuffer): Promise<OffscreenCanvas> {
+/** Decode + smart-upscale small crops. Returns the recognition canvas plus a
+ *  snapshot of the ORIGINAL colour pixels (before the contrast boost greyscales
+ *  them) so emoji-chroma probing still works. */
+async function prepareImage(imageBuffer: ArrayBuffer): Promise<{ canvas: OffscreenCanvas; color: ImageData }> {
   const bitmap = await createImageBitmap(new Blob([imageBuffer]))
   const longSide = Math.max(bitmap.width, bitmap.height)
   const scale = longSide < UPSCALE_TARGET ? Math.min(UPSCALE_TARGET / longSide, MAX_SCALE) : 1
@@ -156,19 +158,21 @@ async function prepareImage(imageBuffer: ArrayBuffer): Promise<OffscreenCanvas> 
   const w = Math.round(bitmap.width * scale)
   const h = Math.round(bitmap.height * scale)
   const canvas = new OffscreenCanvas(w, h)
-  // willReadFrequently: markUnreadGlyphs samples this canvas with getImageData
-  // per line gap — without the hint Chrome warns on chrome://extensions.
+  // willReadFrequently: we read this canvas back with getImageData (the colour
+  // snapshot below, and the contrast boost) — without the hint Chrome warns.
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(bitmap, 0, 0, w, h)
   bitmap.close()
+  // Snapshot the original colours BEFORE the boost (markUnreadGlyphs needs chroma).
+  const color = ctx.getImageData(0, 0, w, h)
   // Pull weak-contrast coloured text up to strong luminance contrast (no-op on
   // dark backgrounds and on already dark-on-light text).
   boostColoredText(ctx, w, h)
   // NOTE: box coords below are in this (possibly upscaled) space. Indent math is
   // relative so scale cancels; divide by `scale` only if overlaying on the crop.
-  return canvas
+  return { canvas, color }
 }
 
 const median = (xs: number[]): number => {
@@ -210,19 +214,23 @@ const fixDigitOh = (s: string): string => s.replace(/(?<=[1-9])[oO](?=\d)/g, '0'
 // symbol to taste. U+25A1 "white square" = the classic unknown-glyph mark.
 const UNREAD_GLYPH = '□'
 
-/** Fraction of a canvas region's pixels that are strongly chromatic (max−min RGB).
- * Theme-independent: a blank gap or near-mono code/text scores ~0 on any
- * background; a colourful emoji scores high. */
-function gapChroma(ctx: OffscreenCanvasRenderingContext2D, cw: number, ch: number,
+/** Fraction of a region's pixels that are strongly chromatic (max−min RGB). Reads
+ * from the ORIGINAL colour pixels (boostColoredText greyscales the recognition
+ * canvas, which would zero the chroma here). Theme-independent: a blank gap or
+ * near-mono code/text scores ~0 on any background; a colourful emoji scores high. */
+function gapChroma(data: Uint8ClampedArray, cw: number, ch: number,
   x: number, y: number, w: number, h: number): number {
   x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y))
   w = Math.min(cw - x, Math.round(w)); h = Math.min(ch - y, Math.round(h))
   if (w <= 0 || h <= 0) return 0
-  const data = ctx.getImageData(x, y, w, h).data
   let chroma = 0
-  const n = data.length / 4
-  for (let i = 0; i < data.length; i += 4) {
-    if (Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) chroma++
+  let n = 0
+  for (let py = y; py < y + h; py++) {
+    for (let px = x; px < x + w; px++) {
+      const i = (py * cw + px) * 4
+      if (Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) chroma++
+      n++
+    }
   }
   return n ? chroma / n : 0
 }
@@ -241,9 +249,8 @@ const EMOJI_CHROMA = 0.05
  * reconstruction keeps the spot. Honest by construction: a blank gap (chroma ≈ 0)
  * stays whitespace, so ordinary spacing/alignment is never marked.
  */
-function markUnreadGlyphs(canvas: OffscreenCanvas, lines: RecognitionResult[][]): void {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
+function markUnreadGlyphs(color: ImageData, lines: RecognitionResult[][]): void {
+  const { data, width: cw, height: ch } = color
   for (const line of lines) {
     const ws = line.filter(hasText).sort((a, b) => a.box.x - b.box.x)
     if (!ws.length) continue
@@ -254,7 +261,7 @@ function markUnreadGlyphs(canvas: OffscreenCanvas, lines: RecognitionResult[][])
       if (g1 - g0 < lineH * HOLE_GAP) continue
       const y = Math.min(ws[i - 1].box.y, ws[i].box.y)
       const h = Math.max(ws[i - 1].box.height, ws[i].box.height)
-      const chroma = gapChroma(ctx, canvas.width, canvas.height, g0, y, g1 - g0, h)
+      const chroma = gapChroma(data, cw, ch, g0, y, g1 - g0, h)
       if (chroma > EMOJI_CHROMA) {
         line.push({ text: UNREAD_GLYPH, confidence: chroma, box: { x: g0, y, width: g1 - g0, height: h } })
       }
@@ -265,7 +272,7 @@ function markUnreadGlyphs(canvas: OffscreenCanvas, lines: RecognitionResult[][])
     const last = ws[ws.length - 1]
     const tx = last.box.x + last.box.width
     const tw = lineH * 2
-    const chroma = gapChroma(ctx, canvas.width, canvas.height, tx, last.box.y, tw, last.box.height)
+    const chroma = gapChroma(data, cw, ch, tx, last.box.y, tw, last.box.height)
     if (chroma > EMOJI_CHROMA) {
       line.push({ text: UNREAD_GLYPH, confidence: chroma, box: { x: tx, y: last.box.y, width: tw, height: last.box.height } })
     }
@@ -410,7 +417,7 @@ export async function recognizeBuffer(
   onProgress?: (p: number) => void,
 ): Promise<OcrOutput> {
   const svc = await getService(lang, onProgress)
-  const canvas = await prepareImage(imageBuffer)
+  const { canvas, color } = await prepareImage(imageBuffer)
   // noCache: ppu keys its result cache on a hash of the first 1024 bytes of the
   // raw RGBA (the top-left ~256 px) plus the pixel count. Two different captures
   // of the same size with an identical top-left region (white margins, a shared
@@ -429,7 +436,7 @@ export async function recognizeBuffer(
 
   // Mark colourful glyphs the recognizer couldn't read (e.g. emoji) with a
   // placeholder, so they don't silently disappear and corrupt the line.
-  markUnreadGlyphs(canvas, res.lines)
+  markUnreadGlyphs(color, res.lines)
 
   // Re-group into column-aware reading order (fixes multi-column papers that the
   // engine's full-width line grouping would otherwise read interleaved).
