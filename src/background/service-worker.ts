@@ -6,7 +6,7 @@
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import { PREFS_KEY } from '../shared/messages'
-import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, Message, PanelPrefs, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
+import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, ConvertPageMd, Message, PanelPrefs, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
 import { captureFullPage } from './fullpage'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
@@ -72,6 +72,7 @@ type Pending =
   | { kind: 'capture'; req: CaptureRequest }
   | { kind: 'viewport'; msg: CaptureViewport }
   | { kind: 'fullpage'; msg: CaptureFullPage }
+  | { kind: 'md'; msg: ConvertPageMd }
 let pending: Pending | null = null
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
@@ -83,6 +84,8 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     void handleViewport(msg)
   } else if (msg.type === 'CAPTURE_FULLPAGE') {
     void handleFullPage(msg)
+  } else if (msg.type === 'CONVERT_PAGE_MD') {
+    void handleConvertPageMd(msg)
   } else if (msg.type === 'REPROCESS') {
     // Reinterpret an already-captured crop in a different mode — no re-selection.
     void reprocess(msg.imageDataUrl, msg.mode)
@@ -95,6 +98,7 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     else if (pending?.kind === 'select') void startSelection(pending.tabId, pending.mode)
     else if (pending?.kind === 'viewport') void handleViewport(pending.msg)
     else if (pending?.kind === 'fullpage') void handleFullPage(pending.msg)
+    else if (pending?.kind === 'md') void handleConvertPageMd(pending.msg)
     else void startActiveTabSelectionWithLastMode()
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
@@ -256,6 +260,28 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
       truncated,
     }
     await chrome.runtime.sendMessage(runMsg)
+  } catch (err) {
+    postCaptureError(err, msg.origin)
+  }
+}
+
+/** Read the page's full HTML (no OCR — structure comes from the DOM) and hand it to
+ *  the panel, which converts it to Markdown. The injected function is self-contained
+ *  (classic script, no imports), same constraint as fullpage.ts's injects. */
+async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
+  pending = { kind: 'md', msg }
+  try {
+    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: msg.tabId },
+      func: () => ({ html: document.body.innerHTML, title: document.title, url: location.href }),
+    })
+    const page = res?.result as { html: string; title: string; url: string } | undefined
+    if (!page) {
+      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'Could not read this page.' })
+      return
+    }
+    chrome.runtime.sendMessage({ type: 'PAGE_HTML', html: page.html, title: page.title, url: page.url })
   } catch (err) {
     postCaptureError(err, msg.origin)
   }

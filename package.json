@@ -12,6 +12,7 @@
     "verify": "node scripts/verify.mjs",
     "verify:ux": "node scripts/verify-ux.mjs",
     "verify:capture": "node scripts/verify-capture-sources.mjs",
+    "verify:md": "node scripts/verify-md.mjs",
     "test:merge": "node --experimental-strip-types scripts/test-merge.ts",
     "ocr-bench": "node scripts/ocr-bench.mjs",
     "fetch-test-images": "node scripts/fetch-test-images.mjs"
@@ -26,9 +27,12 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@types/turndown": "^5.0.6",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.47",
     "onnxruntime-web": "^1.20.1",
-    "ppu-paddle-ocr": "^5.8.3"
+    "ppu-paddle-ocr": "^5.8.3",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
   }
 }

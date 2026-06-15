@@ -98,6 +98,15 @@
         <button id="capture-viewport" class="btn btn-secondary" type="button">Capture viewport</button>
         <button id="capture-fullpage" class="btn btn-secondary" type="button">Capture full page</button>
       </div>
+      <!-- Reads the page DOM → Markdown (structure, not OCR). -->
+      <button id="page-md" class="btn btn-secondary wide" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16v16H4z" />
+          <path d="M7 15V9l2.5 3L12 9v6" />
+          <path d="M16 9v6m0 0-2-2m2 2 2-2" />
+        </svg>
+        Page → Markdown
+      </button>
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
@@ -212,6 +221,26 @@
             <path d="M5 15V5a2 2 0 0 1 2-2h10" />
           </svg>
           <span class="copy-label">Copy</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- MARKDOWN (full page → .md, structure from the DOM, not OCR) -->
+    <section id="state-markdown" class="state" hidden>
+      <div class="md-head">
+        <span class="section-label">Page Markdown</span>
+        <span id="md-title" class="md-title"></span>
+      </div>
+      <pre id="md-pre" class="md-pre" tabindex="0"></pre>
+      <div class="actions">
+        <button id="md-back" class="btn btn-secondary" type="button">Back</button>
+        <button id="md-download" class="btn btn-secondary" type="button">Download .md</button>
+        <button id="md-copy" class="btn btn-primary" type="button">
+          <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          <span>Copy</span>
         </button>
       </div>
     </section>

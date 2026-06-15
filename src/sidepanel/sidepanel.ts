@@ -8,6 +8,7 @@ import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/vs2015.css'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { htmlToMarkdown } from './html-to-markdown'
 import {
   LOW_CONFIDENCE,
   PREFS_KEY,
@@ -136,8 +137,8 @@ for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
   })
 }
 
-type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'history'
-const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'history']
+type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'history' | 'markdown'
+const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'history', 'markdown']
 const setState = (s: State) => {
   for (const name of STATES) $(`state-${name}`).hidden = name !== s
 }
@@ -246,8 +247,56 @@ $<HTMLButtonElement>('capture-fullpage').addEventListener('click', async () => {
   chrome.runtime.sendMessage({ type: 'CAPTURE_FULLPAGE', tabId: id, origin })
 })
 
+// Page → Markdown: read the page DOM (no OCR) and convert it in this panel.
+let lastMarkdown = ''
+let lastMdTitle = ''
+
+$<HTMLButtonElement>('page-md').addEventListener('click', async () => {
+  startBusy('Reading page…')
+  const { id, origin } = await activeTab()
+  if (id === undefined) {
+    errorMsg.textContent = 'No active tab to read.'
+    setState('error')
+    return
+  }
+  chrome.runtime.sendMessage({ type: 'CONVERT_PAGE_MD', tabId: id, origin })
+})
+
+const mdPre = $('md-pre')
+const mdTitle = $('md-title')
+
+function renderMarkdown(html: string, title: string, url: string): void {
+  lastMarkdown = htmlToMarkdown(html, title, url)
+  lastMdTitle = title || url
+  mdTitle.textContent = lastMdTitle
+  mdPre.textContent = lastMarkdown
+  setState('markdown')
+}
+
+$<HTMLButtonElement>('md-back').addEventListener('click', () => setState(lastResult ? 'result' : 'idle'))
+
+$<HTMLButtonElement>('md-copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(lastMarkdown)
+  } catch {
+    /* clipboard blocked — the <pre> is selectable as a fallback */
+  }
+})
+
+$<HTMLButtonElement>('md-download').addEventListener('click', () => {
+  const slug = (lastMdTitle || 'page').toLowerCase().replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'page'
+  const blob = new Blob([lastMarkdown], { type: 'text/markdown' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${slug}.md`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+})
+
 chrome.runtime.onMessage.addListener((msg: Message) => {
-  if (msg.type === 'OCR_STATUS') {
+  if (msg.type === 'PAGE_HTML') {
+    renderMarkdown(msg.html, msg.title, msg.url)
+  } else if (msg.type === 'OCR_STATUS') {
     if (msg.stage === 'error') {
       errorMsg.textContent = msg.message ?? 'Something went wrong.'
       setState('error')

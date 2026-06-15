@@ -80,6 +80,23 @@ export interface CaptureFullPage {
   origin: string
 }
 
+/** Panel → SW: extract the page's full DOM as Markdown (no OCR — reads structure). */
+export interface ConvertPageMd {
+  type: 'CONVERT_PAGE_MD'
+  /** The tab to read — resolved by the panel at click time. */
+  tabId: number
+  /** Page origin, so the SW can request per-site permission if needed. */
+  origin: string
+}
+
+/** SW → panel: the page's raw HTML, for the panel to convert to Markdown locally. */
+export interface PageHtml {
+  type: 'PAGE_HTML'
+  html: string
+  title: string
+  url: string
+}
+
 /** SW → offscreen: OCR a batch of full-page tiles (top→bottom) and merge into one
  *  text result. */
 export interface RunOcrTiles {
@@ -173,6 +190,8 @@ export type Message =
   | CaptureRequest
   | CaptureViewport
   | CaptureFullPage
+  | ConvertPageMd
+  | PageHtml
   | NeedPermission
   | PermissionGranted
   | Reprocess

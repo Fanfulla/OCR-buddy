@@ -1014,3 +1014,38 @@ figure {
 .capture-extra .btn {
   flex: 1;
 }
+
+.btn.wide {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.md-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.md-title {
+  font-size: 12px;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.md-pre {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0 0 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-2, #1b1d22);
+  border: 1px solid var(--border, #2a2d34);
+  font: 12px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}

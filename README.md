@@ -102,6 +102,17 @@ Three ways to grab what gets OCR'd, all sharing the selected read mode and langu
   is captured only as far as it has loaded; and complex multi-column layouts (e.g. a
   wiki article with a side TOC) can interleave in reading order.
 
+## Page → Markdown
+
+A separate one-click action turns the **current page into faithful Markdown**, shown
+in a preview you can copy or download as a `.md`. Unlike capture, this reads the page's
+**DOM structure** (headings, lists, links, tables, code blocks) — not pixels — so the
+output is real Markdown, not OCR'd text, and it's clean enough to hand straight to an
+LLM. It's fully local (reads the DOM, no network), keeps the full page (nav/header/
+footer included), and resolves relative links to absolute. Text baked into images is a
+planned follow-up (hybrid OCR); cross-origin images can't be read (browser canvas
+taint), so those keep their `alt` text.
+
 ## The three modes
 
 You pick how a region should be read — and you can change your mind *after*
