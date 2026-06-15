@@ -1,8 +1,10 @@
 # OCR Buddy
 
-**Faithful, fully-local OCR for Chrome.** Select any region of your screen — code
-in a paused video, a paragraph in a PDF, a formula, a table — and get the text
-back. No server. No image ever leaves your machine. No hallucinated text.
+**Faithful, fully-local OCR for Chrome.** Grab text from anything on screen — a
+region, the viewport, or a whole scrolling page — code in a paused video, a
+paragraph in a PDF, a formula, a table. Or turn an entire page into clean
+Markdown for an LLM. No server. No image ever leaves your machine. No
+hallucinated text.
 
 🌐 [ocr-buddy.com](https://ocr-buddy.com) · 🧩 Chrome extension (Manifest V3) ·
 🔓 Free & open source (MIT) · 🛡️ 100% local, privacy-first
@@ -89,7 +91,9 @@ Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
 
 ## Capture sources
 
-Three ways to grab what gets OCR'd, all sharing the selected read mode and language:
+Region-select is precise, but dragging a box is overkill when you just want
+*everything* on screen — or everything on a long page. So there are three ways to
+choose what gets OCR'd, all sharing the selected read mode and language:
 
 - **Select region** — drag a box over any part of the page (the original flow).
 - **Capture viewport** — OCR everything currently on screen, in one click, no drag.
