@@ -73,6 +73,9 @@ export interface CaptureViewport {
  *  Always runs the quick pipeline (table/formula across page tiles is incoherent). */
 export interface CaptureFullPage {
   type: 'CAPTURE_FULLPAGE'
+  /** The tab to capture — resolved by the panel at click time so a later tab
+   *  switch can't redirect injection/capture to the wrong tab. */
+  tabId: number
   /** Page origin, so the SW can request per-site capture permission if needed. */
   origin: string
 }

@@ -10,8 +10,8 @@ const OVERLAP = 100
 // Hard cap on tiles to bound infinite-scroll pages.
 const MAX_TILES = 20
 // Pause between captures: captureVisibleTab is limited to ~2/s, and the page
-// needs a paint after scrolling.
-const SETTLE_MS = 550
+// needs a paint after scrolling. 600ms gives margin over the ~500ms floor.
+const SETTLE_MS = 600
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
@@ -33,23 +33,25 @@ function scrollPage(y: number): void {
   window.scrollTo(0, y)
 }
 
+// Note: `(...a: never[]) => T` is the standard but unsound workaround for executeScript's func param, relying on the cast at the call site.
 async function inject<T>(tabId: number, func: (...a: never[]) => T, ...args: unknown[]): Promise<T> {
   const [res] = await chrome.scripting.executeScript({
     target: { tabId },
     func: func as (...a: unknown[]) => T,
     args,
   })
+  if (!res) throw new Error('Page script injection returned no result (tab closed or navigated).')
   return res.result as T
 }
 
 /** One captureVisibleTab with a single retry on the rate-limit error. */
-async function captureOnce(): Promise<string> {
+async function captureOnce(windowId: number): Promise<string> {
   try {
-    return await chrome.tabs.captureVisibleTab({ format: 'png' })
+    return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
   } catch (err) {
     if (/MAX_CAPTURE|too many|quota/i.test(String(err))) {
       await wait(1000)
-      return await chrome.tabs.captureVisibleTab({ format: 'png' })
+      return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
     }
     throw err
   }
@@ -64,6 +66,7 @@ export interface FullPageResult {
  *  Restores the original scroll position when done. */
 export async function captureFullPage(
   tabId: number,
+  windowId: number,
   onProgress?: (tile: number) => void,
 ): Promise<FullPageResult> {
   const m = await inject(tabId, readMetrics)
@@ -79,7 +82,7 @@ export async function captureFullPage(
     }
     await inject(tabId, scrollPage, y)
     await wait(SETTLE_MS)
-    tiles.push(await captureOnce())
+    tiles.push(await captureOnce(windowId))
     onProgress?.(i + 1)
   }
 

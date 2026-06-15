@@ -231,10 +231,13 @@ async function handleViewport(msg: CaptureViewport): Promise<void> {
 async function handleFullPage(msg: CaptureFullPage): Promise<void> {
   pending = { kind: 'fullpage', msg }
   try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-    if (tab?.id === undefined) return
+    const tab = await chrome.tabs.get(msg.tabId)
+    if (tab.id === undefined) {
+      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'The tab to capture is no longer available.' })
+      return
+    }
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
-    const { tiles, truncated } = await captureFullPage(tab.id, (t) =>
+    const { tiles, truncated } = await captureFullPage(tab.id, tab.windowId, (t) =>
       chrome.runtime.sendMessage({
         type: 'OCR_STATUS',
         stage: 'capturing',
