@@ -60,6 +60,35 @@ export interface Reprocess {
   mode: CaptureMode
 }
 
+/** Panel → SW: capture the whole visible viewport (no region selection), then OCR. */
+export interface CaptureViewport {
+  type: 'CAPTURE_VIEWPORT'
+  /** Which pipeline to run; viewport is a single image so all modes are valid. */
+  mode: CaptureMode
+  /** Page origin, so the SW can request per-site capture permission if needed. */
+  origin: string
+}
+
+/** Panel → SW: capture the full scrollable page, OCR each tile, merge the text.
+ *  Always runs the quick pipeline (table/formula across page tiles is incoherent). */
+export interface CaptureFullPage {
+  type: 'CAPTURE_FULLPAGE'
+  /** Page origin, so the SW can request per-site capture permission if needed. */
+  origin: string
+}
+
+/** SW → offscreen: OCR a batch of full-page tiles (top→bottom) and merge into one
+ *  text result. */
+export interface RunOcrTiles {
+  type: 'RUN_OCR_TILES'
+  /** PNG data URLs, one per captured viewport, in scroll order. */
+  imageDataUrls: string[]
+  /** Language pack id; default = bundled Latin. */
+  lang?: string
+  /** True when the tile cap was hit and the page was only partly captured. */
+  truncated?: boolean
+}
+
 /** SW → offscreen/worker: run OCR on this cropped image. */
 export interface RunOcr {
   type: 'RUN_OCR'
@@ -131,16 +160,21 @@ export interface OcrResult {
   imageDataUrl: string
   /** Empty result is a valid, honest answer (blank/ambiguous region). */
   empty: boolean
+  /** Optional non-error caption (e.g. full-page capture was truncated). */
+  note?: string
 }
 
 export type Message =
   | StartSelection
   | ShowOverlay
   | CaptureRequest
+  | CaptureViewport
+  | CaptureFullPage
   | NeedPermission
   | PermissionGranted
   | Reprocess
   | RunOcr
+  | RunOcrTiles
   | OcrStatus
   | OcrResult
 
