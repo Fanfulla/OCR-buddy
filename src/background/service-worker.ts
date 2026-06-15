@@ -69,6 +69,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 type Pending =
   | { kind: 'select'; tabId: number; mode: CaptureMode }
   | { kind: 'capture'; req: CaptureRequest }
+  | { kind: 'viewport'; msg: CaptureViewport }
 let pending: Pending | null = null
 
 chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
@@ -88,6 +89,7 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
     // grant always leads somewhere.
     if (pending?.kind === 'capture') void handleCapture(pending.req)
     else if (pending?.kind === 'select') void startSelection(pending.tabId, pending.mode)
+    else if (pending?.kind === 'viewport') void handleViewport(pending.msg)
     else void startActiveTabSelectionWithLastMode()
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
@@ -200,6 +202,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
 
 /** Capture the whole visible viewport (no region selection) and OCR it. */
 async function handleViewport(msg: CaptureViewport): Promise<void> {
+  pending = { kind: 'viewport', msg }
   try {
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
