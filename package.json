@@ -13,6 +13,7 @@
     "verify:ux": "node scripts/verify-ux.mjs",
     "verify:capture": "node scripts/verify-capture-sources.mjs",
     "verify:md": "node scripts/verify-md.mjs",
+    "verify:md-images": "node scripts/verify-md-images.mjs",
     "test:merge": "node --experimental-strip-types scripts/test-merge.ts",
     "ocr-bench": "node scripts/ocr-bench.mjs",
     "fetch-test-images": "node scripts/fetch-test-images.mjs"

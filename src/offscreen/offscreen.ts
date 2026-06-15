@@ -4,14 +4,30 @@
 
 import { recognizeBuffer, recognizeFormulaImage, recognizeTableImage } from './engine'
 import { mergeTiles } from '../background/merge-tiles'
-import type { Message, OcrResult, OcrStatus, RunOcr, RunOcrTiles } from '../shared/messages'
+import type { Message, OcrResult, OcrStatus, PageImagesOcr, RunOcr, RunOcrImages, RunOcrTiles } from '../shared/messages'
 
 if (!crossOriginIsolated) {
   console.warn('[OCR Buddy] offscreen not cross-origin isolated — WASM threads disabled')
 }
 
-function post(msg: OcrStatus | OcrResult): void {
+function post(msg: OcrStatus | OcrResult | PageImagesOcr): void {
   chrome.runtime.sendMessage(msg)
+}
+
+/** Page → Markdown hybrid: OCR a batch of page images; texts come back
+ *  index-aligned with the request (empty string where nothing was read). */
+async function runImages(req: RunOcrImages): Promise<void> {
+  const texts: string[] = []
+  for (const dataUrl of req.imageDataUrls) {
+    try {
+      const buf = await (await fetch(dataUrl)).arrayBuffer()
+      const out = await recognizeBuffer(buf, req.lang)
+      texts.push(out.text.trim())
+    } catch {
+      texts.push('') // unreadable image → no caption, never invent
+    }
+  }
+  post({ type: 'PAGE_IMAGES_OCR', texts })
 }
 
 async function run(req: RunOcr): Promise<void> {
@@ -137,5 +153,6 @@ async function runTiles(req: RunOcrTiles): Promise<void> {
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'RUN_OCR') void run(msg)
   else if (msg.type === 'RUN_OCR_TILES') void runTiles(msg)
+  else if (msg.type === 'RUN_OCR_IMAGES') void runImages(msg)
   return false
 })

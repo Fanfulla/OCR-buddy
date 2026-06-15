@@ -89,12 +89,36 @@ export interface ConvertPageMd {
   origin: string
 }
 
-/** SW → panel: the page's raw HTML, for the panel to convert to Markdown locally. */
+/** A readable page image (same-origin / CORS-enabled), captured for hybrid OCR. */
+export interface PageImage {
+  /** The element's resolved src — used to match it back into the HTML. */
+  src: string
+  /** PNG data URL of the image's pixels (only present when readable). */
+  dataUrl: string
+}
+
+/** SW → panel: the page's raw HTML + readable images, for the panel to convert to
+ *  Markdown locally (and OCR the images for hybrid captions). */
 export interface PageHtml {
   type: 'PAGE_HTML'
   html: string
   title: string
   url: string
+  /** Readable images to OCR for captions (cross-origin ones are omitted). */
+  images: PageImage[]
+}
+
+/** Panel → offscreen: OCR a batch of images; texts come back index-aligned. */
+export interface RunOcrImages {
+  type: 'RUN_OCR_IMAGES'
+  imageDataUrls: string[]
+  lang?: string
+}
+
+/** offscreen → panel: per-image OCR text, index-aligned with RunOcrImages. */
+export interface PageImagesOcr {
+  type: 'PAGE_IMAGES_OCR'
+  texts: string[]
 }
 
 /** SW → offscreen: OCR a batch of full-page tiles (top→bottom) and merge into one
@@ -192,6 +216,8 @@ export type Message =
   | CaptureFullPage
   | ConvertPageMd
   | PageHtml
+  | RunOcrImages
+  | PageImagesOcr
   | NeedPermission
   | PermissionGranted
   | Reprocess

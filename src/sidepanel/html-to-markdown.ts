@@ -13,8 +13,10 @@ const STRIP = 'script, style, noscript, template, link, iframe, object, embed, s
 
 /** Parse HTML into a DETACHED document and strip non-content nodes. Never touches
  *  the live page (the SW already serialized it to a string). Relative links/images
- *  are resolved against the page URL so the Markdown is portable (AI-friendly). */
-function clean(html: string, baseUrl: string): string {
+ *  are resolved against the page URL so the Markdown is portable (AI-friendly).
+ *  `ocrBySrc` (optional, hybrid mode) maps an image's absolute src → text OCR'd from
+ *  it; each match gets a clearly-labelled blockquote caption after the image. */
+function clean(html: string, baseUrl: string, ocrBySrc?: Map<string, string>): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   doc.querySelectorAll(STRIP).forEach((el) => el.remove())
   // aria-hidden / hidden elements are presentational (icons, offscreen menus).
@@ -33,6 +35,21 @@ function clean(html: string, baseUrl: string): string {
   }
   absolutize(doc.querySelectorAll('a[href]'), 'href')
   absolutize(doc.querySelectorAll('img[src]'), 'src')
+  // Hybrid OCR: after each readable image we recognized text in, insert a labelled
+  // blockquote so the .md makes clear this text was extracted FROM an image (never
+  // silently merged into the prose).
+  if (ocrBySrc && ocrBySrc.size) {
+    doc.querySelectorAll('img[src]').forEach((img) => {
+      const text = ocrBySrc.get(img.getAttribute('src') ?? '')
+      if (!text) return
+      const bq = doc.createElement('blockquote')
+      const strong = doc.createElement('strong')
+      strong.textContent = 'Text extracted from image (OCR):'
+      bq.appendChild(strong)
+      bq.appendChild(doc.createTextNode(` ${text}`))
+      img.parentNode?.insertBefore(bq, img.nextSibling)
+    })
+  }
   return doc.body.innerHTML
 }
 
@@ -48,9 +65,9 @@ function buildService(): TurndownService {
 }
 
 /** HTML string → Markdown. `title`/`url` become a small front-matter-free header so
- *  an AI consumer knows the source. */
-export function htmlToMarkdown(html: string, title: string, url: string): string {
-  const body = buildService().turndown(clean(html, url))
+ *  an AI consumer knows the source. `ocrBySrc` (optional) adds OCR'd image captions. */
+export function htmlToMarkdown(html: string, title: string, url: string, ocrBySrc?: Map<string, string>): string {
+  const body = buildService().turndown(clean(html, url, ocrBySrc))
   const header = [title && `# ${title}`, url && `<${url}>`].filter(Boolean).join('\n\n')
   return [header, body].filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }

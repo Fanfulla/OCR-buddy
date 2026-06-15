@@ -250,6 +250,10 @@ $<HTMLButtonElement>('capture-fullpage').addEventListener('click', async () => {
 // Page → Markdown: read the page DOM (no OCR) and convert it in this panel.
 let lastMarkdown = ''
 let lastMdTitle = ''
+// Hybrid mode: the page payload is held while its readable images are OCR'd, then
+// converted once the per-image text arrives (index-aligned with `pendingImages`).
+let pendingPage: { html: string; title: string; url: string } | null = null
+let pendingImages: import('../shared/messages').PageImage[] = []
 
 $<HTMLButtonElement>('page-md').addEventListener('click', async () => {
   startBusy('Reading page…')
@@ -265,8 +269,8 @@ $<HTMLButtonElement>('page-md').addEventListener('click', async () => {
 const mdPre = $('md-pre')
 const mdTitle = $('md-title')
 
-function renderMarkdown(html: string, title: string, url: string): void {
-  lastMarkdown = htmlToMarkdown(html, title, url)
+function renderMarkdown(html: string, title: string, url: string, ocrBySrc?: Map<string, string>): void {
+  lastMarkdown = htmlToMarkdown(html, title, url, ocrBySrc)
   lastMdTitle = title || url
   mdTitle.textContent = lastMdTitle
   mdPre.textContent = lastMarkdown
@@ -295,7 +299,26 @@ $<HTMLButtonElement>('md-download').addEventListener('click', () => {
 
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'PAGE_HTML') {
-    renderMarkdown(msg.html, msg.title, msg.url)
+    // No readable images → convert straight away. Otherwise OCR them first
+    // (hybrid), then convert with captions once PAGE_IMAGES_OCR arrives.
+    if (msg.images.length === 0) {
+      renderMarkdown(msg.html, msg.title, msg.url)
+    } else {
+      pendingPage = { html: msg.html, title: msg.title, url: msg.url }
+      pendingImages = msg.images
+      busyLabel.textContent = `Reading text in ${msg.images.length} image${msg.images.length > 1 ? 's' : ''}…`
+      chrome.runtime.sendMessage({ type: 'RUN_OCR_IMAGES', imageDataUrls: msg.images.map((i) => i.dataUrl) })
+    }
+  } else if (msg.type === 'PAGE_IMAGES_OCR') {
+    if (!pendingPage) return false
+    const ocrBySrc = new Map<string, string>()
+    pendingImages.forEach((img, i) => {
+      const t = msg.texts[i]
+      if (t) ocrBySrc.set(img.src, t)
+    })
+    renderMarkdown(pendingPage.html, pendingPage.title, pendingPage.url, ocrBySrc)
+    pendingPage = null
+    pendingImages = []
   } else if (msg.type === 'OCR_STATUS') {
     if (msg.stage === 'error') {
       errorMsg.textContent = msg.message ?? 'Something went wrong.'

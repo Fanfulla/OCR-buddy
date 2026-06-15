@@ -113,9 +113,13 @@ in a preview you can copy or download as a `.md`. Unlike capture, this reads the
 **DOM structure** (headings, lists, links, tables, code blocks) — not pixels — so the
 output is real Markdown, not OCR'd text, and it's clean enough to hand straight to an
 LLM. It's fully local (reads the DOM, no network), keeps the full page (nav/header/
-footer included), and resolves relative links to absolute. Text baked into images is a
-planned follow-up (hybrid OCR); cross-origin images can't be read (browser canvas
-taint), so those keep their `alt` text.
+footer included), and resolves relative links to absolute.
+
+It's also **hybrid**: text baked into readable images is OCR'd and inserted right
+after the image as a clearly-labelled blockquote (`> **Text extracted from image
+(OCR):** …`), so it's never silently merged into the prose — you always know which
+text came from a picture. Cross-origin images can't be read (browser canvas taint),
+so those keep just their `alt` text.
 
 ## The three modes
 

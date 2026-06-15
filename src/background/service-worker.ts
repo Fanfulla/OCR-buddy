@@ -274,14 +274,51 @@ async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: msg.tabId },
-      func: () => ({ html: document.body.innerHTML, title: document.title, url: location.href }),
+      // Self-contained (classic script): serialize the HTML and extract the pixels
+      // of READABLE images (same-origin / CORS) for hybrid OCR. Cross-origin images
+      // taint the canvas and throw on toDataURL — they're skipped (keep their alt).
+      func: () => {
+        const MAX_IMAGES = 12
+        const MIN_W = 200
+        const MIN_H = 60
+        const MAX_SIDE = 1400
+        const images: { src: string; dataUrl: string }[] = []
+        const candidates = Array.from(document.images)
+          .filter((im) => im.naturalWidth >= MIN_W && im.naturalHeight >= MIN_H)
+          .slice(0, MAX_IMAGES)
+        for (const im of candidates) {
+          try {
+            const s = Math.min(1, MAX_SIDE / Math.max(im.naturalWidth, im.naturalHeight))
+            const c = document.createElement('canvas')
+            c.width = Math.round(im.naturalWidth * s)
+            c.height = Math.round(im.naturalHeight * s)
+            const cx = c.getContext('2d')
+            if (!cx) continue
+            cx.drawImage(im, 0, 0, c.width, c.height)
+            images.push({ src: im.currentSrc || im.src, dataUrl: c.toDataURL('image/png') })
+          } catch {
+            /* cross-origin tainted canvas — unreadable, skip */
+          }
+        }
+        return { html: document.body.innerHTML, title: document.title, url: location.href, images }
+      },
     })
-    const page = res?.result as { html: string; title: string; url: string } | undefined
+    const page = res?.result as
+      | { html: string; title: string; url: string; images: { src: string; dataUrl: string }[] }
+      | undefined
     if (!page) {
       chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'Could not read this page.' })
       return
     }
-    chrome.runtime.sendMessage({ type: 'PAGE_HTML', html: page.html, title: page.title, url: page.url })
+    // The panel OCRs readable images for hybrid captions — it needs the engine alive.
+    if (page.images?.length) await ensureOffscreen()
+    chrome.runtime.sendMessage({
+      type: 'PAGE_HTML',
+      html: page.html,
+      title: page.title,
+      url: page.url,
+      images: page.images ?? [],
+    })
   } catch (err) {
     postCaptureError(err, msg.origin)
   }
