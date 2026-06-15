@@ -33,6 +33,7 @@ const selectingNote = $('selecting-note')
 const cropEl = $<HTMLImageElement>('crop')
 const textEl = $('text')
 const emptyNote = $('empty-note')
+const resultNote = $<HTMLParagraphElement>('result-note')
 const uncertainSummary = $('uncertain-summary')
 const uncertainCount = $('uncertain-count')
 const errorMsg = $('error-msg')
@@ -227,17 +228,21 @@ function startBusy(label: string): void {
 $<HTMLButtonElement>('capture-viewport').addEventListener('click', async () => {
   startBusy('Capturing viewport…')
   const { origin } = await activeTab()
+  // Empty origin (e.g. chrome:// pages) intentionally lets the SW fall back to
+  // the all-sites permission prompt — same behaviour as the region-capture flow.
   chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT', mode: captureMode, origin })
 })
 
 $<HTMLButtonElement>('capture-fullpage').addEventListener('click', async () => {
+  // Go busy synchronously first — setState('busy') hides the idle buttons so a
+  // second click can't fire a duplicate full-page capture during the await below.
+  startBusy('Capturing full page…')
   const { id, origin } = await activeTab()
   if (id === undefined) {
     errorMsg.textContent = 'No active tab to capture.'
     setState('error')
     return
   }
-  startBusy('Capturing full page…')
   chrome.runtime.sendMessage({ type: 'CAPTURE_FULLPAGE', tabId: id, origin })
 })
 
@@ -330,9 +335,8 @@ function renderResult(r: OcrResult, save = true) {
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
-  const noteEl = $<HTMLParagraphElement>('result-note')
-  noteEl.textContent = r.note ?? ''
-  noteEl.hidden = !r.note
+  resultNote.textContent = r.note ?? ''
+  resultNote.hidden = !r.note
   // Only quick mode has the Prose/Code split; formula & table don't.
   seg.hidden = r.mode !== 'quick'
   syncPicker(resultPick, r.mode)
