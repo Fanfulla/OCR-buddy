@@ -87,6 +87,21 @@ Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
 
 ---
 
+## Capture sources
+
+Three ways to grab what gets OCR'd, all sharing the selected read mode and language:
+
+- **Select region** — drag a box over any part of the page (the original flow).
+- **Capture viewport** — OCR everything currently on screen, in one click, no drag.
+- **Capture full page** — scroll-capture the whole page and OCR it. Each viewport is
+  captured as its own tile and OCR'd separately (so text stays above the detector's
+  downscale threshold and remains legible), then the tiles are merged with seam
+  de-duplication. Caveats, stated honestly: it runs the Text/Code pipeline (not
+  Table/Formula); very long pages stop at a tile cap and say so in the result; pages
+  with a sticky header/sidebar may repeat that text across tiles; lazy-loaded content
+  is captured only as far as it has loaded; and complex multi-column layouts (e.g. a
+  wiki article with a side TOC) can interleave in reading order.
+
 ## The three modes
 
 You pick how a region should be read — and you can change your mind *after*

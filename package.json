@@ -1,6 +1,6 @@
 {
   "name": "ocr-buddy",
-  "version": "0.2.5",
+  "version": "2.5.5",
   "description": "Faithful, fully-local OCR Chrome extension. Select a region, get the text — no server, no hallucinations.",
   "type": "module",
   "private": true,
