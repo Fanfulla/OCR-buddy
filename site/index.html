@@ -7,8 +7,8 @@
 
 <!-- ============================ SEO ============================ -->
 <title>OCR Buddy — Faithful, 100% Local OCR for Chrome (Code, Formulas & Tables)</title>
-<meta name="description" content="OCR Buddy is a free, open-source Chrome extension that reads text, code, LaTeX formulas and tables from any region of your screen — entirely on your device. No server, no uploads, no hallucinated text." />
-<meta name="keywords" content="OCR, Chrome extension, local OCR, offline OCR, screenshot to text, code OCR, formula to LaTeX, table to Markdown, PaddleOCR, PP-OCRv5, privacy OCR, no hallucination OCR, WebGPU OCR" />
+<meta name="description" content="OCR Buddy is a free, open-source Chrome extension that reads text, code, LaTeX formulas and tables from a region, the viewport, or a whole scrolling page — and can export any page as clean Markdown for an LLM. Entirely on your device. No server, no uploads, no hallucinated text." />
+<meta name="keywords" content="OCR, Chrome extension, local OCR, offline OCR, screenshot to text, code OCR, formula to LaTeX, table to Markdown, full page OCR, page to markdown, html to markdown, webpage to markdown for LLM, PaddleOCR, PP-OCRv5, privacy OCR, no hallucination OCR, WebGPU OCR" />
 <meta name="author" content="OCR Buddy contributors" />
 <meta name="robots" content="index, follow" />
 <meta name="theme-color" content="#121216" />
@@ -44,15 +44,18 @@
   "url": "https://ocr-buddy.com/",
   "installUrl": "https://chromewebstore.google.com/detail/hfbghdhendbnblgnjgkfmpgokiiddlhj",
   "image": "https://ocr-buddy.com/assets/og-image.png",
-  "description": "A faithful, fully-local OCR extension for Chrome. Select any region of your screen and get back text, code, LaTeX formulas or Markdown tables — recognized on your device with no server and no hallucinated text.",
+  "description": "A faithful, fully-local OCR extension for Chrome. Capture a region, the viewport, or a whole scrolling page and get back text, code, LaTeX formulas or Markdown tables — or turn an entire page into clean Markdown for an LLM. Recognized on your device with no server and no hallucinated text.",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "featureList": [
     "100% on-device OCR — no server, no uploads, works offline",
+    "Three capture sources: select a region, the whole viewport in one click, or scroll-capture an entire page",
+    "Page to Markdown: turn a whole page into clean, AI-ready Markdown (real structure from the DOM) and copy or download it",
     "Text & Code mode with layout-faithful reconstruction",
     "Formula mode: one equation to LaTeX, rendered beside the source crop",
     "Table mode: one table to a Markdown grid (handles borderless tables)",
+    "Reads coloured text on light backgrounds (red error messages, blue links)",
     "11 language packs: Latin built in; Chinese+Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil, Telugu on demand",
     "OCR any image: open, paste, drag-drop, or right-click an image on a page",
     "Capture history stored only on your device",
@@ -70,7 +73,8 @@
     {"@type":"Question","name":"Does my data ever leave my device?","acceptedAnswer":{"@type":"Answer","text":"No. There is no server and no API calls. The OCR models are bundled in the extension and run entirely on your device, so even the first run is fully offline. The only network use is downloading the extension itself — and, only if you explicitly pick a non-Latin language pack, a one-time download of that model file, which is then cached locally. No page content or image ever rides along."}},
     {"@type":"Question","name":"Is OCR Buddy free?","acceptedAnswer":{"@type":"Answer","text":"Yes. OCR Buddy is free and open source under the MIT license. There is no account, no subscription and no telemetry."}},
     {"@type":"Question","name":"Why not use a large AI vision model for OCR?","acceptedAnswer":{"@type":"Answer","text":"Large generative OCR models predict the next likely token, so when the image is unclear they invent fluent but wrong text. OCR Buddy uses the classic detection plus CTC-recognition family, which transcribes the glyphs that are actually present and fails to blanks or low-confidence output instead of fabricating a sentence."}},
-    {"@type":"Question","name":"What can OCR Buddy read?","acceptedAnswer":{"@type":"Answer","text":"Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — including borderless tables. Latin scripts are built in; on-demand language packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly: open, paste, drag-drop, or right-click it on a page."}},
+    {"@type":"Question","name":"What can OCR Buddy read?","acceptedAnswer":{"@type":"Answer","text":"Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — including borderless tables. You can capture a region, the whole viewport in one click, or scroll-capture an entire page. It also reads coloured text on light backgrounds, such as red error messages or blue links. Latin scripts are built in; on-demand language packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly: open, paste, drag-drop, or right-click it on a page."}},
+    {"@type":"Question","name":"Can it export a whole page as Markdown?","acceptedAnswer":{"@type":"Answer","text":"Yes. The Page to Markdown action turns the current page into clean Markdown built from the page's own structure (headings, lists, links, tables, code blocks) — not from OCR — so it is faithful and ready to paste into an LLM. You get a preview you can copy or download as a .md file, and it runs entirely on your device."}},
     {"@type":"Question","name":"Does it work offline?","acceptedAnswer":{"@type":"Answer","text":"Yes. The bundled models ship inside the extension, so the default Latin experience works with no network connection at all. Optional non-Latin language packs are downloaded once when you select them and cached locally — offline from then on."}},
     {"@type":"Question","name":"Which browsers are supported?","acceptedAnswer":{"@type":"Answer","text":"Chrome 124 or newer, which provides WebGPU in workers. On devices without WebGPU it falls back to multi-threaded WebAssembly with identical results."}}
   ]
@@ -539,14 +543,14 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
     <div class="center reveal">
       <div class="sec-tag">How it works</div>
       <h2 class="sec-title">The whole pipeline, on your device.</h2>
-      <p class="sec-sub">A drag-select hands a clean crop to a warm OCR engine running in an offscreen worker — coordinated, never uploaded.</p>
+      <p class="sec-sub">A region, the viewport, or a whole scrolling page hands a clean crop to a warm OCR engine running in an offscreen worker — coordinated, never uploaded. Or skip OCR entirely and export the page as Markdown.</p>
     </div>
     <div class="pipe">
       <div class="node reveal">
         <div class="pn">01</div>
         <div class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg></div>
-        <h4>Select a region</h4>
-        <p>Drag over text on the page. The overlay is passive — it never reads page content.</p>
+        <h4>Pick a source</h4>
+        <p>Drag a region, grab the whole viewport in one click, or scroll-capture an entire page. The overlay is passive — it never reads page content.</p>
         <span class="arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
       </div>
       <div class="node reveal">
@@ -795,7 +799,11 @@ footer { border-top: 1px solid var(--border-soft); padding: 40px 0; }
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">What can it read?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
-        <p>Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — borderless tables included. Latin scripts are built in; on-demand packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly — open, paste, drag-drop, or right-click it on a page.</p>
+        <p>Plain text and code (including code in a paused video or a PDF), single equations converted to LaTeX, and single tables converted to a Markdown grid — borderless tables included. Capture a region, the whole viewport in one click, or scroll-capture an entire page. It even reads coloured text on light backgrounds, like red error messages or blue links. Latin scripts are built in; on-demand packs add Chinese, Japanese, Cyrillic, East Slavic, Greek, Korean, Thai, Devanagari, Tamil and Telugu. You can also OCR any image directly — open, paste, drag-drop, or right-click it on a page.</p>
+      </details>
+      <details class="faq-item" name="faq">
+        <summary><span class="q">Can it export a whole page as Markdown?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>Yes. <strong>Page → Markdown</strong> turns the current page into clean Markdown built from its own structure — headings, lists, links, tables, code blocks — not from OCR, so it's faithful and ready to paste into an LLM. You get a preview to copy or download as a <code>.md</code> file, and it runs entirely on your device.</p>
       </details>
       <details class="faq-item" name="faq">
         <summary><span class="q">Does it work offline?</span><span class="pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
