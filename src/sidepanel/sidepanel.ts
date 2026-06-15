@@ -206,6 +206,41 @@ for (const id of ['select-btn', 'new-capture', 'retry-btn']) {
   $<HTMLButtonElement>(id).addEventListener('click', startSelection)
 }
 
+async function activeTab(): Promise<{ id?: number; origin: string }> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    return { id: tab?.id, origin: tab?.url ? new URL(tab.url).origin : '' }
+  } catch {
+    return { id: undefined, origin: '' }
+  }
+}
+
+function startBusy(label: string): void {
+  busyLabel.textContent = label
+  progressFill.style.width = '8%'
+  spinnerEl.hidden = false
+  selectingNote.hidden = true
+  busySkeleton.hidden = false
+  setState('busy')
+}
+
+$<HTMLButtonElement>('capture-viewport').addEventListener('click', async () => {
+  startBusy('Capturing viewport…')
+  const { origin } = await activeTab()
+  chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT', mode: captureMode, origin })
+})
+
+$<HTMLButtonElement>('capture-fullpage').addEventListener('click', async () => {
+  const { id, origin } = await activeTab()
+  if (id === undefined) {
+    errorMsg.textContent = 'No active tab to capture.'
+    setState('error')
+    return
+  }
+  startBusy('Capturing full page…')
+  chrome.runtime.sendMessage({ type: 'CAPTURE_FULLPAGE', tabId: id, origin })
+})
+
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'OCR_STATUS') {
     if (msg.stage === 'error') {
@@ -213,6 +248,7 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
       setState('error')
     } else if (msg.stage !== 'done') {
       showStage(msg.stage, msg.progress)
+      if (msg.message) busyLabel.textContent = msg.message
     }
   } else if (msg.type === 'NEED_PERMISSION') {
     needOrigin = msg.origin
@@ -294,6 +330,9 @@ function renderResult(r: OcrResult, save = true) {
   cropEl.src = r.imageDataUrl
   setBackendBadge(r.backend)
   emptyNote.hidden = !r.empty
+  const noteEl = $<HTMLParagraphElement>('result-note')
+  noteEl.textContent = r.note ?? ''
+  noteEl.hidden = !r.note
   // Only quick mode has the Prose/Code split; formula & table don't.
   seg.hidden = r.mode !== 'quick'
   syncPicker(resultPick, r.mode)
@@ -344,6 +383,14 @@ function renderText() {
   // map to the edited text, so they're dropped.
   if (editedProse !== null) {
     textEl.textContent = editedProse
+    uncertainSummary.hidden = true
+    return
+  }
+
+  // Merged/word-less quick result (full-page capture): no per-word boxes, so render
+  // the plain text. Normal captures keep the per-word confidence spans below.
+  if (lastResult.words.length === 0) {
+    textEl.textContent = lastResult.text
     uncertainSummary.hidden = true
     return
   }

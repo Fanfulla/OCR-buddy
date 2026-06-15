@@ -94,6 +94,10 @@
         </svg>
         Select region
       </button>
+      <div class="capture-extra">
+        <button id="capture-viewport" class="btn btn-secondary" type="button">Capture viewport</button>
+        <button id="capture-fullpage" class="btn btn-secondary" type="button">Capture full page</button>
+      </div>
       <span class="shortcut">
         Shortcut <kbd id="kbd-mod">Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd>
       </span>
@@ -189,6 +193,7 @@
         </svg>
         <span>No confident text found in this region. Nothing was invented.</span>
       </p>
+      <p id="result-note" class="mode-desc" hidden></p>
 
       <!-- Copy is the goal of the flow → primary. New capture → secondary. -->
       <div class="actions">
