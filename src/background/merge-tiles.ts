@@ -12,6 +12,11 @@
 // duplicate than to swallow real content).
 const HEADER_SLACK = 6
 
+// Overlap can only occur against the tail of the previous tile, never the whole
+// document. Bound the lookback so seam matching is intent-clear and can't match
+// far-away repeated lines. Comfortably exceeds any realistic tile's line count.
+const MAX_SEAM_LINES = 60
+
 const norm = (s: string): string => s.trim().replace(/\s+/g, ' ')
 
 /** Index in `b` from which to start appending: drops b[0 .. idx-1] (a leading
@@ -20,8 +25,8 @@ function seamCut(a: string[], b: string[]): number {
   const maxK = Math.min(a.length, b.length)
   for (let k = maxK; k >= 1; k--) {
     const tail = a.slice(a.length - k).map(norm)
-    const limit = Math.min(b.length - k, HEADER_SLACK)
-    for (let start = 0; start <= limit; start++) {
+    const maxStart = Math.min(b.length - k, HEADER_SLACK)
+    for (let start = 0; start <= maxStart; start++) {
       let ok = true
       for (let i = 0; i < k; i++) {
         if (norm(b[start + i]) !== tail[i]) {
@@ -38,9 +43,12 @@ function seamCut(a: string[], b: string[]): number {
 export function mergeTiles(tiles: string[]): string {
   const merged: string[] = []
   for (const tile of tiles) {
+    // Stored lines keep leading/interior whitespace verbatim; seamCut compares
+    // via norm() (trim + collapse) — intentional so merged text preserves layout
+    // while seam matching is whitespace-tolerant.
     const lines = tile.split('\n').map((l) => l.replace(/\s+$/, ''))
     if (lines.every((l) => l.trim() === '')) continue // skip blank tile
-    const cut = merged.length ? seamCut(merged, lines) : 0
+    const cut = merged.length ? seamCut(merged.slice(-MAX_SEAM_LINES), lines) : 0
     for (let i = cut; i < lines.length; i++) merged.push(lines[i])
   }
   return merged.join('\n').replace(/\n{3,}/g, '\n\n').trim()

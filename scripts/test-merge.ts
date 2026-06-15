@@ -34,4 +34,14 @@ assert.equal(
   'a\nfoo  bar\nb',
 )
 
+// 7. Empty input → empty string.
+assert.equal(mergeTiles([]), '')
+
+// 8. A short generic line repeated in body text is NOT over-cut: the real
+//    multi-line seam wins over a coincidental single-line match.
+assert.equal(
+  mergeTiles(['intro\nNote\nbody one\nbody two', 'body two\nNote\nconclusion']),
+  'intro\nNote\nbody one\nbody two\nNote\nconclusion',
+)
+
 console.log('mergeTiles: all assertions passed')
