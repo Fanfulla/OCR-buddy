@@ -9,7 +9,7 @@ import 'highlight.js/styles/vs2015.css'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { htmlToMarkdown } from './html-to-markdown'
-import { hasRated, openReview, recordSuccessAndMaybeNudge, renderStars, THANKS_COPY } from './review'
+import { markRated, openReviewPage, recordSuccessAndMaybeNudge, renderStars } from './review'
 import {
   LOW_CONFIDENCE,
   PREFS_KEY,
@@ -820,23 +820,19 @@ const reviewNudge = $('review-nudge')
 const reviewNudgeTitle = $('review-nudge-title')
 const reviewStarsNudge = $('review-stars-nudge')
 const reviewStarsIdle = $('review-stars-idle')
-const reviewIdleLabel = $('review-idle-label')
 
-function onRate() {
-  void openReview()
+// Fixed idle link: always present and usable on every launch. Opens the store and
+// never freezes into a "thanks" state, so it stays a working entry point. It does
+// NOT mark the user rated — only the nudge does that.
+reviewStarsIdle.replaceChildren(renderStars(openReviewPage))
+
+// Nudge stars: open the store AND stop the periodic nudge for good (the nudge is
+// the part that nags, so acting on it self-suppresses).
+function onNudgeRate() {
+  openReviewPage()
+  void markRated()
   reviewNudge.hidden = true
-  reviewStarsIdle.hidden = true
-  reviewIdleLabel.textContent = THANKS_COPY
 }
-
-reviewStarsIdle.replaceChildren(renderStars(onRate))
-
-void hasRated().then((rated) => {
-  if (rated) {
-    reviewStarsIdle.hidden = true
-    reviewIdleLabel.textContent = THANKS_COPY
-  }
-})
 
 $<HTMLButtonElement>('review-dismiss').addEventListener('click', () => {
   reviewNudge.hidden = true
@@ -848,7 +844,7 @@ async function maybeShowNudge() {
   if (count === null) return
   reviewNudgeTitle.textContent = `Nice, that's ${count} captures with OCR Buddy.`
   // Mount fresh stars so their entrance animation replays on each appearance.
-  reviewStarsNudge.replaceChildren(renderStars(onRate))
+  reviewStarsNudge.replaceChildren(renderStars(onNudgeRate))
   reviewNudge.hidden = false
   reviewNudge.classList.remove('in')
   void reviewNudge.offsetWidth // force reflow so the container animation replays

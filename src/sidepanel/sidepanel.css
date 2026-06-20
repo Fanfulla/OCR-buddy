@@ -1080,7 +1080,8 @@ figure {
   --star-dim: #4a4a52;
   font-size: 22px;
   color: var(--star-dim);
-  transition: color 0.12s ease, transform 0.12s ease;
+  transition: color 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center bottom;
   animation: star-pop 0.32s both;
   animation-delay: calc(var(--i) * 60ms);
 }
@@ -1093,7 +1094,7 @@ figure {
   color: var(--star-dim);
 }
 .star:hover {
-  transform: scale(1.18);
+  transform: scale(1.45);
 }
 @keyframes star-pop {
   from {
@@ -1118,6 +1119,11 @@ figure {
   align-items: center;
   gap: 7px;
   text-align: center;
+}
+/* `display:flex` above defeats the UA `[hidden]` rule — restore it, or the nudge
+   stays visible (empty) on every result instead of only at the milestones. */
+.review-nudge[hidden] {
+  display: none;
 }
 .review-nudge.in {
   animation: ob-enter 0.26s cubic-bezier(0.2, 0.7, 0.3, 1);

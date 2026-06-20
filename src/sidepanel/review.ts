@@ -6,10 +6,10 @@
 export const REVIEW_URL =
   'https://chromewebstore.google.com/detail/ocr-buddy/hfbghdhendbnblgnjgkfmpgokiiddlhj/reviews'
 
-export const THANKS_COPY = "Thanks, you're the best ★"
-
-/** Successful captures between consecutive nudges; the cycle repeats forever. */
-const GAPS = [10, 15, 30]
+/** The first nudge comes early (5 captures) to catch engaged users; after that a
+ *  growing cycle keeps later asks well-spaced so they never nag. */
+const FIRST_GAP = 5
+const CYCLE = [10, 15, 30]
 
 export interface ReviewState {
   successCount: number
@@ -21,10 +21,11 @@ const REVIEW_KEY = 'review.v1'
 const DEFAULT_STATE: ReviewState = { successCount: 0, nudgeCount: 0, rated: false }
 
 /** Total successful captures needed before the (nudgeCount-th, 0-indexed) nudge:
- *  the sum of the first nudgeCount+1 gaps of the repeating cycle. */
+ *  the early first gap, then the repeating cycle for each subsequent nudge.
+ *  Thresholds: 5, 15, 30, 60, 70, 85, 115, … */
 export function thresholdFor(nudgeCount: number): number {
-  let total = 0
-  for (let i = 0; i <= nudgeCount; i++) total += GAPS[i % GAPS.length]
+  let total = FIRST_GAP
+  for (let i = 1; i <= nudgeCount; i++) total += CYCLE[(i - 1) % CYCLE.length]
   return total
 }
 
@@ -62,16 +63,18 @@ export async function recordSuccessAndMaybeNudge(): Promise<number | null> {
   return show ? s.successCount : null
 }
 
-/** Open the reviews tab and mark the user rated (never nudge again). */
-export async function openReview(): Promise<void> {
+/** Open the Chrome Web Store reviews page in a new tab. Pure action, no state change
+ *  — the always-on idle link uses this so it stays usable every session. */
+export function openReviewPage(): void {
   void chrome.tabs.create({ url: REVIEW_URL })
+}
+
+/** Stop the periodic nudge for good. Called only when the user acts on the NUDGE
+ *  itself (the thing that nags) — not the always-on idle link. */
+export async function markRated(): Promise<void> {
   const s = await loadState()
   s.rated = true
   await saveState(s)
-}
-
-export async function hasRated(): Promise<boolean> {
-  return (await loadState()).rated
 }
 
 /** Build a 5-star widget. The gold fill-up-to-cursor is pure CSS; this wires the
