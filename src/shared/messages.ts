@@ -52,6 +52,15 @@ export interface PermissionGranted {
   type: 'PERMISSION_GRANTED'
 }
 
+/** SW → panel: this page can NEVER be captured (Chrome Web Store, chrome:// …).
+ *  Distinct from NEED_PERMISSION — no host grant can unblock it, so the panel shows
+ *  an honest dead-end instead of the futile "Enable for this site" prompt. */
+export interface Restricted {
+  type: 'RESTRICTED'
+  /** Human phrase naming the page class, e.g. "the Chrome Web Store". */
+  reason: string
+}
+
 /** Panel → SW: re-run a DIFFERENT mode on the already-captured crop (no re-select).
  *  Lets the user reinterpret the same region as text / document / formula / table. */
 export interface Reprocess {
@@ -220,6 +229,7 @@ export type Message =
   | PageImagesOcr
   | NeedPermission
   | PermissionGranted
+  | Restricted
   | Reprocess
   | RunOcr
   | RunOcrTiles

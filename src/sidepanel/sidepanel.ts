@@ -9,6 +9,7 @@ import 'highlight.js/styles/vs2015.css'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { htmlToMarkdown } from './html-to-markdown'
+import { hasRated, openReview, recordSuccessAndMaybeNudge, renderStars, THANKS_COPY } from './review'
 import {
   LOW_CONFIDENCE,
   PREFS_KEY,
@@ -137,8 +138,8 @@ for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
   })
 }
 
-type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'history' | 'markdown'
-const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'history', 'markdown']
+type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'restricted' | 'history' | 'markdown'
+const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'restricted', 'history', 'markdown']
 const setState = (s: State) => {
   for (const name of STATES) $(`state-${name}`).hidden = name !== s
 }
@@ -148,6 +149,9 @@ const permWhy = $('perm-why')
 const permEnable = $<HTMLButtonElement>('perm-enable')
 const permDismiss = $<HTMLButtonElement>('perm-dismiss')
 let needOrigin = ''
+
+const restrictedWhat = $('restricted-what')
+$<HTMLButtonElement>('restricted-back').addEventListener('click', () => setState('idle'))
 
 let lastResult: OcrResult | null = null
 let codeMode = false
@@ -334,6 +338,9 @@ chrome.runtime.onMessage.addListener((msg: Message) => {
     permOrigin.textContent = msg.origin || 'all sites'
     permWhy.hidden = true
     setState('permission')
+  } else if (msg.type === 'RESTRICTED') {
+    restrictedWhat.textContent = msg.reason
+    setState('restricted')
   } else if (msg.type === 'OCR_RESULT') {
     renderResult(msg)
   }
@@ -416,6 +423,10 @@ function renderResult(r: OcrResult, save = true) {
   copyBtn.querySelector('.copy-label')!.textContent = copyLabelFor(r.mode)
   renderText()
   setState('result')
+  // Review nudge: only on a FRESH, non-empty capture — never on history restores
+  // (save === false) and never after a poor read (empty).
+  reviewNudge.hidden = true
+  if (save && !r.empty) void maybeShowNudge()
 }
 
 /** Code mode → syntax-highlighted codeText (read-only). Prose → editable, with
@@ -803,3 +814,43 @@ if (isMac) {
 
 void restorePrefs()
 setState('idle')
+
+// ----- Review prompt (fixed idle link + gentle nudge) -----
+const reviewNudge = $('review-nudge')
+const reviewNudgeTitle = $('review-nudge-title')
+const reviewStarsNudge = $('review-stars-nudge')
+const reviewStarsIdle = $('review-stars-idle')
+const reviewIdleLabel = $('review-idle-label')
+
+function onRate() {
+  void openReview()
+  reviewNudge.hidden = true
+  reviewStarsIdle.hidden = true
+  reviewIdleLabel.textContent = THANKS_COPY
+}
+
+reviewStarsIdle.replaceChildren(renderStars(onRate))
+
+void hasRated().then((rated) => {
+  if (rated) {
+    reviewStarsIdle.hidden = true
+    reviewIdleLabel.textContent = THANKS_COPY
+  }
+})
+
+$<HTMLButtonElement>('review-dismiss').addEventListener('click', () => {
+  reviewNudge.hidden = true
+})
+
+/** Count a fresh successful capture; show the nudge if it crossed the threshold. */
+async function maybeShowNudge() {
+  const count = await recordSuccessAndMaybeNudge()
+  if (count === null) return
+  reviewNudgeTitle.textContent = `Nice, that's ${count} captures with OCR Buddy.`
+  // Mount fresh stars so their entrance animation replays on each appearance.
+  reviewStarsNudge.replaceChildren(renderStars(onRate))
+  reviewNudge.hidden = false
+  reviewNudge.classList.remove('in')
+  void reviewNudge.offsetWidth // force reflow so the container animation replays
+  reviewNudge.classList.add('in')
+}

@@ -116,6 +116,11 @@
         paste, or drop one here
       </p>
       <input id="image-input" type="file" accept="image/*" hidden />
+      <!-- Fixed review link — quiet, always available. -->
+      <div id="review-idle" class="review-link">
+        <span id="review-idle-label" class="review-link-label">Put in a good word</span>
+        <div id="review-stars-idle" class="review-stars-mount"></div>
+      </div>
     </section>
 
     <!-- BUSY -->
@@ -223,6 +228,14 @@
           <span class="copy-label">Copy</span>
         </button>
       </div>
+
+      <!-- Review nudge — gentle, growing-gap cadence; hidden until earned. -->
+      <div id="review-nudge" class="review-nudge" hidden>
+        <button id="review-dismiss" class="review-dismiss" type="button" aria-label="Not now">✕</button>
+        <p id="review-nudge-title" class="review-nudge-title">Nice work with OCR Buddy.</p>
+        <div id="review-stars-nudge" class="review-stars-mount"></div>
+        <p class="review-nudge-sub">A star helps others find it. I'll open the store for you.</p>
+      </div>
     </section>
 
     <!-- MARKDOWN (full page → .md, structure from the DOM, not OCR) -->
@@ -305,6 +318,32 @@
         you allow it. Enable it anytime, or just use it on the tab where you opened
         the panel (or press the shortcut there).
       </p>
+    </section>
+
+    <!-- RESTRICTED (a page Chrome blocks every extension from capturing) -->
+    <section id="state-restricted" class="state" hidden>
+      <div class="error-icon" aria-hidden="true">
+        <!-- eye-off: "this page can't be read" — no circle, so it doesn't double
+             up with the round badge behind it. -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+          <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+          <path d="M9.88 9.88a3 3 0 0 0 4.24 4.24" />
+          <path d="M2 2l20 20" />
+        </svg>
+      </div>
+      <div class="idle-copy">
+        <h1>This page can't be captured</h1>
+        <p class="hint">
+          Chrome blocks every extension from reading
+          <strong id="restricted-what" class="perm-origin"></strong>, so OCR Buddy
+          can't capture here. No permission can change that. Open a normal web page
+          and try again.
+        </p>
+      </div>
+      <div class="actions">
+        <button id="restricted-back" class="btn btn-primary" type="button">Got it</button>
+      </div>
     </section>
 
     <script type="module" src="./sidepanel.ts"></script>

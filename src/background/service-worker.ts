@@ -6,7 +6,8 @@
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import { PREFS_KEY } from '../shared/messages'
-import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, ConvertPageMd, Message, PanelPrefs, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
+import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, ConvertPageMd, Message, PanelPrefs, Restricted, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
+import { restrictedReason } from '../shared/restricted'
 import { captureFullPage } from './fullpage'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
@@ -133,6 +134,8 @@ async function startActiveTabSelection(mode: CaptureMode): Promise<void> {
 /** Show the overlay on a tab, injecting it first if the content script is absent.
  * If we lack host access, ask the user to grant capture for this site. */
 async function startSelection(tabId: number, mode: CaptureMode): Promise<void> {
+  const tab = await chrome.tabs.get(tabId).catch(() => undefined)
+  if (blockedIfRestricted(tab?.url)) return
   pending = { kind: 'select', tabId, mode }
   if (await showOverlay(tabId, mode)) return
   try {
@@ -161,6 +164,16 @@ async function showOverlay(tabId: number, mode: CaptureMode): Promise<boolean> {
  * per-site grant. */
 async function injectOverlay(tabId: number): Promise<void> {
   await chrome.scripting.executeScript({ target: { tabId }, files: ['content/overlay.js'] })
+}
+
+/** If a tab's page is one Chrome forbids all extensions from touching (the Web
+ *  Store, chrome:// …), tell the panel to abstain honestly and return true. No
+ *  permission prompt can help, so callers must NOT fall through to NEED_PERMISSION. */
+function blockedIfRestricted(url: string | undefined): boolean {
+  const reason = restrictedReason(url)
+  if (!reason) return false
+  chrome.runtime.sendMessage({ type: 'RESTRICTED', reason } satisfies Restricted)
+  return true
 }
 
 /** Best-effort tab origin (empty if we can't read it without permission). */
@@ -216,6 +229,8 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
 async function handleViewport(msg: CaptureViewport): Promise<void> {
   pending = { kind: 'viewport', msg }
   try {
+    const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    if (blockedIfRestricted(active?.url)) return
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
     await ensureOffscreen()
@@ -236,6 +251,7 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
   pending = { kind: 'fullpage', msg }
   try {
     const tab = await chrome.tabs.get(msg.tabId)
+    if (blockedIfRestricted(tab.url)) return
     if (tab.id === undefined) {
       chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'The tab to capture is no longer available.' })
       return
@@ -271,6 +287,8 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
 async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
   pending = { kind: 'md', msg }
   try {
+    const tab = await chrome.tabs.get(msg.tabId).catch(() => undefined)
+    if (blockedIfRestricted(tab?.url)) return
     chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: msg.tabId },
