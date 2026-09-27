@@ -24,6 +24,11 @@
     header { padding:70px 0 46px; max-width:760px; }
     h1 { font-size:clamp(36px,6vw,66px); line-height:1.08; letter-spacing:-.045em; font-weight:650; margin:0 0 24px; }
     .intro { color:var(--muted); font-size:18px; max-width:620px; margin:0; }
+    .follow { display:flex; flex-wrap:wrap; align-items:center; gap:16px 24px; margin-top:28px; }
+    .follow p { margin:0; color:var(--muted); font-size:14px; }
+    .follow p strong { display:block; }
+    .follow-link { display:inline-flex; align-items:center; gap:12px; padding:11px 17px; background:var(--text); color:var(--bg); border-radius:7px; text-decoration:none; font-size:14px; font-weight:650; }
+    .follow-link:hover { background:var(--blue); }
     .release { display:grid; grid-template-columns:190px 1fr; gap:44px; border-top:1px solid var(--line); padding:38px 0 48px; }
     .version { display:inline-block; color:var(--green); background:#20332a; padding:6px 11px; border:1px solid #395949; border-radius:5px; }
     .date { display:block; color:var(--muted); font-size:12px; margin-top:12px; }
@@ -72,6 +77,10 @@
         <p class="eyebrow">THE OCR BUDDY CHANGELOG</p>
         <h1>Small changes.<br />Fewer steps.</h1>
         <p class="intro">A record of what was added, changed and removed. Built around the way you capture and use text.</p>
+        <div class="follow">
+          <a class="follow-link" href="https://x.com/Fanfulladev" target="_blank" rel="noopener noreferrer">Follow @Fanfulladev <span aria-hidden="true">↗</span></a>
+          <p><strong>Meet the maker.</strong>Follow along and share your ideas for OCR Buddy.</p>
+        </div>
       </header>
       <article class="release" id="v2-6-0" aria-labelledby="release-title">
         <aside><span class="version">v2.6.0</span><time class="date" datetime="2026-09-27">September 27, 2026</time></aside>

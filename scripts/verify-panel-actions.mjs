@@ -110,7 +110,7 @@ try {
   assert.equal(await updates.locator('#added').textContent(), 'Added')
   assert.equal(await updates.locator('#changed').textContent(), 'Changed')
   assert.equal(await updates.locator('#removed').textContent(), 'Removed')
-  assert.equal(await updates.locator('a[href="https://x.com/Fanfulladev"]').count(), 2)
+  assert.equal(await updates.locator('.follow-link').getAttribute('href'), 'https://x.com/Fanfulladev')
   await updates.screenshot({ path: path.join(profile, 'changelog.png'), fullPage: true })
   await updates.setViewportSize({ width: 360, height: 760 })
   assert(await updates.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile changelog overflows')
