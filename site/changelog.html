@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="What's new in OCR Buddy: faster capture controls, local PDF reading, clipboard options and capture history improvements." />
+  <meta name="referrer" content="no-referrer" />
+  <title>What's new · OCR Buddy</title>
+  <style>
+    :root { color-scheme: dark; --bg:#15171b; --surface:#1c1f25; --line:#343943; --text:#f1f3f6; --muted:#b0b8c5; --blue:#8bbbff; --green:#8ddbb5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 "Segoe UI",sans-serif; }
+    a { color:var(--blue); text-underline-offset:4px; }
+    a:focus-visible { outline:2px solid var(--blue); outline-offset:5px; }
+    .wrap { max-width:1080px; margin:0 auto; padding:0 32px; }
+    nav { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px; padding:28px 0; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; color:var(--text); text-decoration:none; font-weight:650; }
+    .brand svg { width:29px; height:29px; color:var(--blue); }
+    .nav-links { display:flex; flex-wrap:wrap; gap:22px; font-size:13px; }
+    .nav-links a { color:var(--muted); text-decoration:none; }
+    .nav-links a:hover { color:var(--text); }
+    .eyebrow, .tag, .version { font:12px/1.5 Consolas,monospace; letter-spacing:.07em; }
+    .eyebrow { color:var(--blue); margin:0 0 18px; }
+    header { padding:70px 0 46px; max-width:760px; }
+    h1 { font-size:clamp(36px,6vw,66px); line-height:1.08; letter-spacing:-.045em; font-weight:650; margin:0 0 24px; }
+    .intro { color:var(--muted); font-size:18px; max-width:620px; margin:0; }
+    .release { display:grid; grid-template-columns:190px 1fr; gap:44px; border-top:1px solid var(--line); padding:38px 0 48px; }
+    .version { display:inline-block; color:var(--green); background:#20332a; padding:6px 11px; border:1px solid #395949; border-radius:5px; }
+    .date { display:block; color:var(--muted); font-size:12px; margin-top:12px; }
+    .release h2 { font-size:25px; line-height:1.25; letter-spacing:-.02em; margin:0 0 12px; }
+    .release .summary { color:var(--muted); margin:0 0 30px; }
+    .group { margin-top:25px; }
+    .tag { font-size:11px; color:var(--blue); margin:0 0 12px; text-transform:uppercase; }
+    .tag.changed { color:#f0c784; }
+    .tag.removed { color:var(--muted); }
+    ul { margin:0; padding-left:20px; }
+    li { margin:0 0 15px; padding-left:5px; color:var(--muted); }
+    li::marker { color:var(--line); }
+    strong { color:var(--text); font-weight:600; }
+    .note { background:var(--surface); border-left:3px solid var(--green); padding:18px 22px; margin-top:30px; color:var(--muted); font-size:14px; }
+    .note p { margin:0; }
+    .note p + p { margin-top:9px; }
+    .older { padding-top:25px; }
+    .older .version { color:var(--muted); background:var(--surface); border-color:var(--line); }
+    footer { border-top:1px solid var(--line); padding:30px 0 50px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:20px; color:var(--muted); font-size:13px; }
+    footer p { margin:0; }
+    footer a { margin-left:15px; }
+    @media (max-width:650px) {
+      .wrap { padding:0 22px; }
+      header { padding:42px 0 32px; }
+      .release { grid-template-columns:1fr; gap:20px; }
+      .date { display:inline; margin-left:12px; }
+      .intro { font-size:16px; }
+      footer a { margin:0 15px 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav aria-label="Main navigation">
+      <a class="brand" href="https://ocr-buddy.com" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5M8 9h8M8 12h8M8 15h5" /></svg>
+        OCR Buddy
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/Fanfulla/ocr-buddy" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        <a href="https://x.com/Fanfulladev" target="_blank" rel="noopener noreferrer">Follow on X ↗</a>
+      </div>
+    </nav>
+    <main>
+      <header>
+        <p class="eyebrow">THE OCR BUDDY CHANGELOG</p>
+        <h1>Small changes.<br />Fewer steps.</h1>
+        <p class="intro">A record of what was added, changed and removed. Built around the way you capture and use text.</p>
+      </header>
+      <article class="release" id="v2-6-0" aria-labelledby="release-title">
+        <aside><span class="version">v2.6.0</span><time class="date" datetime="2026-09-27">September 27, 2026</time></aside>
+        <div>
+          <h2 id="release-title">Your everyday capture tools, closer.</h2>
+          <p class="summary">This update brings quick actions to the top of the panel, makes saved captures easier to reuse, and adds local PDF reading.</p>
+          <section class="group" aria-labelledby="added">
+            <h3 class="tag" id="added">Added</h3>
+            <ul>
+              <li><strong>Separate keyboard commands.</strong> Assign shortcuts for viewport and full-page captures in Chrome's extension shortcut settings. Your existing area-selection shortcut stays available.</li>
+              <li><strong>Select an area from the toolbar icon.</strong> Enable it in Settings &amp; shortcuts. The default still opens the panel.</li>
+              <li><strong>Optional automatic copy.</strong> New results can go straight to your clipboard. Off by default, with clipboard write access requested only when enabled.</li>
+              <li><strong>Multiple captures, one copy.</strong> Select items in History and copy or save their text together, oldest first, with a separator between captures.</li>
+              <li><strong>Open a PDF locally.</strong> Read all pages or a page range without scrolling. Extract existing text, OCR scanned pages, or choose OCR for every page. Processing can be cancelled.</li>
+              <li><strong>These release notes.</strong> A bundled copy opens after a version update and stays available through What's new in the panel.</li>
+            </ul>
+          </section>
+          <section class="group" aria-labelledby="changed">
+            <h3 class="tag changed" id="changed">Changed</h3>
+            <ul>
+              <li><strong>A more direct panel.</strong> Area, Viewport and Full page are at the top, including after a result. History and settings sit at the bottom.</li>
+              <li><strong>Safer page captures.</strong> Capture checks the intended tab, stops when its context changes, and attempts to restore the original scroll position on failure.</li>
+              <li><strong>Clearer clipboard feedback.</strong> Failed writes show a message instead of claiming the text was copied.</li>
+            </ul>
+          </section>
+          <section class="group" aria-labelledby="removed">
+            <h3 class="tag removed" id="removed">Removed</h3>
+            <ul><li>The large decorative placeholder from the start screen. Existing OCR modes and saved captures are retained.</li></ul>
+          </section>
+          <div class="note">
+            <p><strong>Your documents stay on your device.</strong> PDF reading and OCR run locally. This changelog loads no analytics, remote fonts or scripts. External links open only when you choose them.</p>
+            <p><strong>PDF limits:</strong> 50 MB, 300 pages. For an embedded PDF, save it from its viewer and open the file here. Automatic access to every embedded viewer is not supported. Complex layouts and mixed text/image pages still need checking.</p>
+          </div>
+        </div>
+      </article>
+      <article class="release older" aria-labelledby="previous-title">
+        <aside><span class="version">v2.5.6</span></aside>
+        <div><h2 id="previous-title">A clearer review prompt.</h2><p class="summary">Refined the in-panel review prompt and added an earlier invitation to rate the extension.</p><a href="https://github.com/Fanfulla/ocr-buddy/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">Read the project changelog ↗</a></div>
+      </article>
+    </main>
+    <footer>
+      <p>Something to improve? Your feedback shapes OCR Buddy.</p>
+      <div><a href="https://github.com/Fanfulla/ocr-buddy/issues" target="_blank" rel="noopener noreferrer">Report an issue</a><a href="https://x.com/Fanfulladev" target="_blank" rel="noopener noreferrer">@Fanfulladev</a></div>
+    </footer>
+  </div>
+</body>
+</html>

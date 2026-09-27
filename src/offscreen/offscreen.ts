@@ -14,6 +14,14 @@ function post(msg: OcrStatus | OcrResult | PageImagesOcr): void {
   chrome.runtime.sendMessage(msg)
 }
 
+// A language change can destroy an existing session. Keep all callers sequential.
+let work = Promise.resolve()
+function enqueue(job: () => Promise<void>): void {
+  work = work.then(job).catch(() => {
+    post({ type: 'OCR_STATUS', stage: 'error', message: 'Local OCR failed. Please try again.' })
+  })
+}
+
 /** Page → Markdown hybrid: OCR a batch of page images; texts come back
  *  index-aligned with the request (empty string where nothing was read). */
 async function runImages(req: RunOcrImages): Promise<void> {
@@ -150,9 +158,41 @@ async function runTiles(req: RunOcrTiles): Promise<void> {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg: Message) => {
-  if (msg.type === 'RUN_OCR') void run(msg)
-  else if (msg.type === 'RUN_OCR_TILES') void runTiles(msg)
-  else if (msg.type === 'RUN_OCR_IMAGES') void runImages(msg)
+chrome.runtime.onMessage.addListener((msg: Message, sender, respond) => {
+  if (msg.type === 'OFFSCREEN_COPY_TEXT') {
+    if (sender.id !== chrome.runtime.id || sender.tab || typeof msg.text !== 'string' || msg.text.length > 2_000_000) return false
+    const field = document.createElement('textarea')
+    try {
+      field.value = msg.text
+      document.body.append(field)
+      field.select()
+      respond({ ok: document.execCommand('copy') })
+    } catch {
+      respond({ ok: false })
+    } finally {
+      field.remove()
+    }
+    return false
+  }
+  if (msg.type === 'PDF_OCR_IMAGE') {
+    if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel/'))) return false
+    if (typeof msg.imageDataUrl !== 'string' || !msg.imageDataUrl.startsWith('data:image/png;base64,') || msg.imageDataUrl.length > 32_000_000) {
+      respond({ error: 'Invalid PDF page image.' })
+      return false
+    }
+    enqueue(async () => {
+      try {
+        const buf = await (await fetch(msg.imageDataUrl)).arrayBuffer()
+        const out = await recognizeBuffer(buf, msg.lang)
+        respond({ text: out.text })
+      } catch {
+        respond({ error: 'Could not read this PDF page.' })
+      }
+    })
+    return true
+  }
+  if (msg.type === 'RUN_OCR') enqueue(() => run(msg))
+  else if (msg.type === 'RUN_OCR_TILES') enqueue(() => runTiles(msg))
+  else if (msg.type === 'RUN_OCR_IMAGES') enqueue(() => runImages(msg))
   return false
 })

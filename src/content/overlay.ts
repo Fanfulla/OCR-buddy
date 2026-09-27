@@ -10,11 +10,14 @@ const OVERLAY_FLAG = '__ocrBuddyOverlay'
 // Mode for the in-flight selection, echoed back in CAPTURE_REQUEST so the
 // service worker stays stateless (it may be recycled while the user drags).
 let captureMode: CaptureMode = 'quick'
+let cancelOverlay: (() => void) | undefined
 
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'SHOW_OVERLAY') {
     captureMode = msg.mode ?? 'quick'
     showOverlay()
+  } else if (msg.type === 'HIDE_OVERLAY') {
+    cancelOverlay?.()
   }
   return false
 })
@@ -68,17 +71,28 @@ function showOverlay() {
   let dragging = false
 
   function teardown() {
+    cancelOverlay = undefined
+    dragging = false
     root.remove()
     w[OVERLAY_FLAG] = false
     window.removeEventListener('keydown', onKey, true)
     document.removeEventListener('keydown', onKey, true)
   }
 
+  function notifyCancelled() {
+    void chrome.runtime.sendMessage({ type: 'SELECTION_CANCELLED' }).catch(() => {})
+  }
+
+  cancelOverlay = () => {
+    teardown()
+    notifyCancelled()
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
-      teardown()
+      cancelOverlay?.()
     }
   }
   // Capture phase on both targets to grab Esc before the page. (On Chrome's PDF
@@ -118,7 +132,10 @@ function showOverlay() {
     // Hide the overlay BEFORE capture so the dimmer isn't in the screenshot.
     teardown()
 
-    if (width < 4 || height < 4) return // accidental click, not a selection
+    if (width < 4 || height < 4) {
+      notifyCancelled()
+      return // accidental click, not a selection
+    }
 
     const capture: CaptureRequest = {
       type: 'CAPTURE_REQUEST',

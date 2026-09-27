@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.6.0 - 2026-09-27
+
+### Added
+- Separate viewport and full-page commands, assignable in Chrome's extension shortcuts.
+- Optional area selection when clicking the toolbar icon; existing default preserved.
+- Opt-in automatic copy with optional clipboard write permission and failure feedback.
+- History multi-selection with chronological copy and plain-text export.
+- Local PDF import with page ranges, existing-text extraction, OCR for scanned pages,
+  a force-OCR option, progress and cancellation. PDF contents are not saved in history.
+- Release notes on the website and bundled in the extension. The local page opens
+  after a version-changing update, not first installation or browser startup.
+
+### Changed
+- Compact panel with persistent capture actions at the top and history/settings below.
+- Capture checks the target tab before and after screenshots, including quota retries.
+- Full-page capture waits for scroll settlement, stops at the final viewport and
+  attempts to restore both scroll axes on success and failure in the original document.
+- OCR work is serialized to avoid overlapping model-session changes.
+- Build dependency security updates and bundled PDF.js 5.5.207 legacy assets.
+
+### Removed
+- The decorative start-screen placeholder. Existing capture modes and history remain.
+
+### Notes
+- New clipboard access is optional and requested only when automatic copy is enabled.
+- PDFs are opened from local files, up to 50 MB and 300 pages. Save embedded PDFs
+  from their viewer first; universal embedded-viewer access is not supported.
+- For mixed text/image pages, use force OCR to include text inside images. Complex
+  layouts remain best-effort; compare the result with the source.
+- Existing non-Latin language packs still download only on explicit selection.
+- No remote OCR, document uploads, new telemetry, or remote PDF assets.
+
+## 2.5.6
+- Refined the in-panel review prompt and introduced an earlier review invitation.
+
 ## 2.5.5 — 2026-06-16
 
 ### New

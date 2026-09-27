@@ -93,11 +93,11 @@ try {
   for (let i = 0; i < 30; i++) {
     await panel.waitForTimeout(1000)
     const st = await panel.evaluate(() => ({
-      hidden: document.getElementById('result')?.hidden,
-      status: document.getElementById('status')?.textContent,
+      hidden: document.getElementById('state-result')?.hidden,
+      status: document.getElementById('busy-label')?.textContent,
     }))
     console.log(`  t${i}s status=${JSON.stringify(st.status)} resultHidden=${st.hidden}`)
-    if (!st.hidden) {
+    if (st.hidden === false) {
       shown = true
       break
     }
@@ -112,6 +112,21 @@ try {
   const ok = /HELLO\s*OCR\s*7/i.test(text)
   console.log('UX_OK =', ok)
   process.exitCode = ok ? 0 : 1
+  if (ok) {
+    await page.bringToFront()
+    await panel.evaluate(() => chrome.runtime.sendMessage({ type: 'START_SELECTION', mode: 'quick' }))
+    await panel.locator('#cancel-selection').waitFor({ state: 'visible' })
+    await page.goto(`${url}?selection-cancel-test`)
+    await panel.locator('#state-result').waitFor({ state: 'visible' })
+    if (!await panel.locator('#select-btn').isEnabled()) throw new Error('navigation left selection controls disabled')
+    await page.bringToFront()
+    await panel.evaluate(() => chrome.runtime.sendMessage({ type: 'START_SELECTION', mode: 'quick' }))
+    await panel.locator('#cancel-selection').waitFor({ state: 'visible' })
+    await panel.locator('#cancel-selection').click()
+    await panel.locator('#state-result').waitFor({ state: 'visible' })
+    await page.getByText('Drag to select · Esc or click to cancel', { exact: true }).waitFor({ state: 'hidden' })
+    console.log('SELECTION CANCEL: PASS (navigation and panel button)')
+  }
 } catch (e) {
   console.error('UX VERIFY FAILED:', e)
   process.exitCode = 1

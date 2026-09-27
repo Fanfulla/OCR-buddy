@@ -72,6 +72,8 @@ export interface Reprocess {
 /** Panel → SW: capture the whole visible viewport (no region selection), then OCR. */
 export interface CaptureViewport {
   type: 'CAPTURE_VIEWPORT'
+  /** Pin the user-selected tab across asynchronous work. */
+  tabId?: number
   /** Which pipeline to run; viewport is a single image so all modes are valid. */
   mode: CaptureMode
   /** Page origin, so the SW can request per-site capture permission if needed. */
@@ -218,6 +220,14 @@ export interface OcrResult {
 }
 
 export type Message =
+  | { type: 'PANEL_READY' }
+  | { type: 'SELECTION_CANCELLED' }
+  | { type: 'CANCEL_SELECTION' }
+  | { type: 'HIDE_OVERLAY' }
+  | { type: 'COPY_TEXT'; text: string }
+  | { type: 'OFFSCREEN_COPY_TEXT'; text: string }
+  | { type: 'ENSURE_OFFSCREEN' }
+  | { type: 'PDF_OCR_IMAGE'; imageDataUrl: string; lang?: string }
   | StartSelection
   | ShowOverlay
   | CaptureRequest
@@ -250,4 +260,8 @@ export interface PanelPrefs {
   lang?: string
   /** Save captures to local history (default true; stored on-device only). */
   history?: boolean
+  /** Existing installs keep opening the panel without starting a capture. */
+  iconAction?: 'panel' | 'select'
+  /** Opt-in only; requires the optional clipboardWrite permission. */
+  autoCopy?: boolean
 }

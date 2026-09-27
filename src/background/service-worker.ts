@@ -1,67 +1,106 @@
 // Service worker = COORDINATOR ONLY (no DOM, no model, no inference).
 // Responsibilities:
-//   1. Toolbar icon → open the side panel (no auto-selection).
-//   2. "Select region" button / Ctrl+Shift+O → show the overlay on the active tab.
+//   1. Toolbar icon → open the side panel, optionally select per local prefs.
+//   2. Native commands → select a region, capture a viewport, or capture a page.
 //   3. Receive the selected rect → captureVisibleTab → crop on OffscreenCanvas.
 //   4. Ensure the offscreen document exists → forward the crop for OCR.
 
 import { PREFS_KEY } from '../shared/messages'
 import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, ConvertPageMd, Message, PanelPrefs, Restricted, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
 import { restrictedReason } from '../shared/restricted'
-import { captureFullPage } from './fullpage'
+import { captureFullPage, captureTab } from './fullpage'
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 
-// Toolbar icon: open the panel only. The click grants activeTab for this tab, so
-// the panel's "Select region" button can capture it without page dimming on open.
+// Open before any asynchronous work so Chrome retains the user gesture.
 chrome.action.onClicked.addListener((tab) => {
-  if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id })
+  if (tab.id === undefined) return
+  const tabId = tab.id
+  entrypoint(async () => {
+    if (!await openPanel(tabId)) return
+    const prefs = await panelPrefs()
+    if (prefs.iconAction === 'select') entrypoint(() => startSelection(tabId, prefs.captureMode ?? 'quick'), true)
+  })
 })
 
-// Keyboard shortcut: open the panel AND start selection in one step (the command
-// also grants activeTab, so it works on any tab, not just one already opened).
-chrome.commands.onCommand.addListener(async (command, tab) => {
-  if (command !== 'start-capture' || tab?.id === undefined) return
-  await chrome.sidePanel.open({ tabId: tab.id })
-  await startSelection(tab.id, await lastMode())
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (!['start-capture', 'capture-viewport', 'capture-fullpage'].includes(command) || tab?.id === undefined) return
+  const tabId = tab.id
+  entrypoint(async () => {
+    if (!await openPanel(tabId)) return
+    if (command === 'start-capture') await startSelection(tabId, await lastMode())
+    else if (command === 'capture-viewport') {
+      await handleViewport({ type: 'CAPTURE_VIEWPORT', tabId, mode: await lastMode(), origin: await originOf(tabId) })
+    } else {
+      await handleFullPage({ type: 'CAPTURE_FULLPAGE', tabId, origin: await originOf(tabId) })
+    }
+  }, true)
 })
+
+let captureBusy = false
+
+/** Covers selection setup / capture through OCR handoff, not the asynchronous
+ * engine or panel-owned PDF queue. Never holds a lock while a user selects. */
+function entrypoint(task: () => Promise<void>, exclusive = false): void {
+  if (exclusive && captureBusy) return
+  if (exclusive) captureBusy = true
+  void task().catch((err) => postCaptureError(err, '')).finally(() => {
+    if (exclusive) captureBusy = false
+  })
+}
+
+/** A notification may have no receiver (panel closed). Do not leak rejections. */
+function post(msg: Message): void {
+  void chrome.runtime.sendMessage(msg).catch(() => {})
+}
+
+async function openPanel(tabId: number): Promise<boolean> {
+  await chrome.sidePanel.open({ tabId })
+  // A context existing is not evidence that its JS listener is ready. The panel
+  // acknowledges this probe synchronously; retries are bounded and carry no data.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const reply = await chrome.runtime.sendMessage({ type: 'PANEL_READY' }).catch(() => undefined)
+    if (reply?.ok === true) return reply.busy !== true
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error('The OCR panel is not ready. Reopen it and try again.')
+}
 
 // Right-click an image → OCR it directly (no region selection). The click also
 // grants activeTab, which doubles as temporary host access for same-origin
 // image fetches.
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.contextMenus.create({
     id: 'ocr-image',
     title: 'OCR this image with OCR Buddy',
     contexts: ['image'],
   })
+  if (details.reason === 'update' && details.previousVersion !== chrome.runtime.getManifest().version) {
+    void chrome.tabs.create({ url: chrome.runtime.getURL('updates.html') }).catch(() => {})
+  }
 })
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== 'ocr-image' || !info.srcUrl) return
-  if (tab?.id !== undefined) {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== 'ocr-image' || !info.srcUrl || tab?.id === undefined) return
+  const srcUrl = info.srcUrl
+  const tabId = tab.id
+  entrypoint(async () => {
+    if (!await openPanel(tabId)) return
     try {
-      await chrome.sidePanel.open({ tabId: tab.id })
+      const dataUrl = srcUrl.startsWith('data:')
+        ? srcUrl
+        : await blobToDataUrl(await (await fetch(srcUrl)).blob())
+      await reprocess(dataUrl, await lastMode())
     } catch {
-      /* panel already open or gesture expired — results still broadcast */
+      post({
+        type: 'OCR_STATUS',
+        stage: 'error',
+        message:
+          "Couldn't fetch this image (the site blocks cross-origin access). " +
+          'Use "Select region" over it instead — that path always works.',
+      })
     }
-  }
-  try {
-    const dataUrl = info.srcUrl.startsWith('data:')
-      ? info.srcUrl
-      : await blobToDataUrl(await (await fetch(info.srcUrl)).blob())
-    // Give the freshly-opened panel a beat to attach its message listener.
-    await new Promise((r) => setTimeout(r, 300))
-    await reprocess(dataUrl, await lastMode())
-  } catch {
-    chrome.runtime.sendMessage({
-      type: 'OCR_STATUS',
-      stage: 'error',
-      message:
-        "Couldn't fetch this image (the site blocks cross-origin access). " +
-        'Use "Select region" over it instead — that path always works.',
-    })
-  }
+  }, true)
 })
 
 // The action to retry after the user grants per-site permission: either a
@@ -70,37 +109,93 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // CAPTURE_REQUEST, so it survives the SW being recycled mid-selection.
 type Pending =
   | { kind: 'select'; tabId: number; mode: CaptureMode }
-  | { kind: 'capture'; req: CaptureRequest }
+  | { kind: 'capture'; req: CaptureRequest; tabId?: number; documentId?: string }
   | { kind: 'viewport'; msg: CaptureViewport }
   | { kind: 'fullpage'; msg: CaptureFullPage }
   | { kind: 'md'; msg: ConvertPageMd }
 let pending: Pending | null = null
+let selectionTabId: number | undefined
 
-chrome.runtime.onMessage.addListener((msg: Message, _sender) => {
+function selectionUnavailable(tabId: number): void {
+  if (selectionTabId !== tabId) return
+  selectionTabId = undefined
+  post({ type: 'SELECTION_CANCELLED' })
+}
+
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === 'loading' || info.url !== undefined) selectionUnavailable(tabId)
+})
+chrome.tabs.onRemoved.addListener(selectionUnavailable)
+
+async function cancelSelection(): Promise<void> {
+  const selected = selectionTabId
+  selectionTabId = undefined
+  if (pending?.kind === 'select') pending = null
+  // Tracking is in-memory; after an MV3 restart the active tab is the fallback.
+  const tabId = selected ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.id
+  if (tabId !== undefined) await chrome.tabs.sendMessage(tabId, { type: 'HIDE_OVERLAY' })
+}
+
+chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
+  const ownPage = sender.id === chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL(''))
+  // Extension pages can also live in tabs. Only a content script's tab identifies
+  // the capture source; a panel tab must preserve the explicitly requested target.
+  const contentTab = sender.id === chrome.runtime.id && sender.url && !sender.url.startsWith('chrome-extension://')
+    ? sender.tab : undefined
+  if (msg.type === 'COPY_TEXT' || msg.type === 'ENSURE_OFFSCREEN') {
+    // Clipboard access is limited to the exact panel page (queries/fragments are
+    // harmless), whether it is hosted in the side panel or an extension tab.
+    const ownPanel = ownPage && sender.url?.split(/[?#]/, 1)[0] === chrome.runtime.getURL('src/sidepanel/index.html')
+    if (!ownPage || (msg.type === 'COPY_TEXT' && !ownPanel)) {
+      sendResponse({ ok: false, error: 'Only trusted extension pages may use this request.' })
+      return false
+    }
+    void (async () => {
+      if (msg.type === 'COPY_TEXT') {
+        if (typeof msg.text !== 'string' || msg.text.length > 2_000_000) throw new Error('Invalid clipboard text (maximum 2,000,000 characters).')
+        if (!await chrome.permissions.contains({ permissions: ['clipboardWrite'] })) throw new Error('Clipboard permission has not been granted.')
+        await ensureOffscreen()
+        const reply = await chrome.runtime.sendMessage({ type: 'OFFSCREEN_COPY_TEXT', text: msg.text })
+        if (reply?.ok !== true) throw new Error(reply?.error ?? 'Offscreen clipboard did not respond.')
+      } else await ensureOffscreen()
+      return { ok: true }
+    })().then(sendResponse, (err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }))
+    return true
+  }
   if (msg.type === 'START_SELECTION') {
-    void startActiveTabSelection(msg.mode ?? 'quick')
+    entrypoint(() => startActiveTabSelection(msg.mode ?? 'quick'), true)
+  } else if (msg.type === 'CANCEL_SELECTION' && ownPage) {
+    // The panel restores its state immediately; a closed/navigated tab is normal.
+    void cancelSelection().catch(() => {})
+  } else if (msg.type === 'SELECTION_CANCELLED') {
+    if (contentTab?.id === selectionTabId || ownPage) selectionTabId = undefined
   } else if (msg.type === 'CAPTURE_REQUEST') {
-    void handleCapture(msg)
+    if (contentTab?.id === selectionTabId || ownPage) selectionTabId = undefined
+    entrypoint(() => handleCapture(msg, contentTab?.id, contentTab ? sender.documentId : undefined), true)
   } else if (msg.type === 'CAPTURE_VIEWPORT') {
-    void handleViewport(msg)
+    entrypoint(() => handleViewport({ ...msg, tabId: contentTab?.id ?? msg.tabId }), true)
   } else if (msg.type === 'CAPTURE_FULLPAGE') {
-    void handleFullPage(msg)
+    entrypoint(() => handleFullPage(msg), true)
   } else if (msg.type === 'CONVERT_PAGE_MD') {
-    void handleConvertPageMd(msg)
+    entrypoint(() => handleConvertPageMd(msg), true)
   } else if (msg.type === 'REPROCESS') {
     // Reinterpret an already-captured crop in a different mode — no re-selection.
-    void reprocess(msg.imageDataUrl, msg.mode)
+    entrypoint(() => reprocess(msg.imageDataUrl, msg.mode), true)
   } else if (msg.type === 'PERMISSION_GRANTED') {
     // The MV3 service worker can be recycled while the permission prompt is open,
     // dropping in-memory `pending` — which left "Allow" doing nothing. Fall back to
     // a fresh selection on the active tab (now that host access is granted) so the
     // grant always leads somewhere.
-    if (pending?.kind === 'capture') void handleCapture(pending.req)
-    else if (pending?.kind === 'select') void startSelection(pending.tabId, pending.mode)
-    else if (pending?.kind === 'viewport') void handleViewport(pending.msg)
-    else if (pending?.kind === 'fullpage') void handleFullPage(pending.msg)
-    else if (pending?.kind === 'md') void handleConvertPageMd(pending.msg)
-    else void startActiveTabSelectionWithLastMode()
+    entrypoint(async () => {
+      const retry = pending
+      pending = null
+      if (retry?.kind === 'capture') await handleCapture(retry.req, retry.tabId, retry.documentId)
+      else if (retry?.kind === 'select') await startSelection(retry.tabId, retry.mode)
+      else if (retry?.kind === 'viewport') await handleViewport(retry.msg)
+      else if (retry?.kind === 'fullpage') await handleFullPage(retry.msg)
+      else if (retry?.kind === 'md') await handleConvertPageMd(retry.msg)
+      else await startActiveTabSelectionWithLastMode()
+    }, true)
   }
   // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
   // via broadcast — no relay needed here.
@@ -135,25 +230,30 @@ async function startActiveTabSelection(mode: CaptureMode): Promise<void> {
  * If we lack host access, ask the user to grant capture for this site. */
 async function startSelection(tabId: number, mode: CaptureMode): Promise<void> {
   const tab = await chrome.tabs.get(tabId).catch(() => undefined)
+  if (!tab || !tab.active) throw new Error('The selection tab is no longer active. Return to it and try again.')
   if (blockedIfRestricted(tab?.url)) return
   pending = { kind: 'select', tabId, mode }
-  if (await showOverlay(tabId, mode)) return
+  if (await showOverlay(tabId, mode)) { pending = null; return }
   try {
     await injectOverlay(tabId) // needs host access (activeTab / granted host)
-    if (await showOverlay(tabId, mode)) return
+    if (await showOverlay(tabId, mode)) { pending = null; return }
   } catch {
     // injection blocked — fall through to the permission prompt
   }
-  chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin: await originOf(tabId) })
+  post({ type: 'NEED_PERMISSION', origin: await originOf(tabId) })
 }
 
 /** Tell the overlay (if present) to show; true on success. */
 async function showOverlay(tabId: number, mode: CaptureMode): Promise<boolean> {
+  selectionTabId = tabId
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'SHOW_OVERLAY', mode } satisfies ShowOverlay)
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'selecting' })
+    if (selectionTabId === tabId) post({ type: 'OCR_STATUS', stage: 'selecting' })
     return true
   } catch {
+    // A cancellation/navigation during delivery must not trigger reinjection.
+    if (selectionTabId !== tabId) return true
+    selectionTabId = undefined
     return false
   }
 }
@@ -172,7 +272,8 @@ async function injectOverlay(tabId: number): Promise<void> {
 function blockedIfRestricted(url: string | undefined): boolean {
   const reason = restrictedReason(url)
   if (!reason) return false
-  chrome.runtime.sendMessage({ type: 'RESTRICTED', reason } satisfies Restricted)
+  pending = null
+  post({ type: 'RESTRICTED', reason } satisfies Restricted)
   return true
 }
 
@@ -197,19 +298,38 @@ async function reprocess(imageDataUrl: string, mode: CaptureMode): Promise<void>
 function postCaptureError(err: unknown, origin: string): void {
   const message = err instanceof Error ? err.message : String(err)
   if (/activeTab|all_urls|permission|cannot be scripted|Cannot access/i.test(message)) {
-    chrome.runtime.sendMessage({ type: 'NEED_PERMISSION', origin })
+    post({ type: 'NEED_PERMISSION', origin })
   } else {
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message })
+    pending = null
+    post({ type: 'OCR_STATUS', stage: 'error', message })
   }
 }
 
-async function handleCapture(req: CaptureRequest): Promise<void> {
-  pending = { kind: 'capture', req }
+async function captureTarget(tabId?: number): Promise<chrome.tabs.Tab> {
+  const tab = tabId === undefined
+    ? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]
+    : await chrome.tabs.get(tabId)
+  if (tab?.id === undefined) throw new Error('The tab to capture is no longer available.')
+  return tab
+}
+
+function checkOrigin(tab: chrome.tabs.Tab, origin: string): void {
+  if (origin && tab.url && new URL(tab.url).origin !== origin) {
+    throw new Error('The capture page changed. Return to the intended page and try again.')
+  }
+}
+
+async function handleCapture(req: CaptureRequest, tabId?: number, documentId?: string): Promise<void> {
+  pending = { kind: 'capture', req, tabId, documentId }
   try {
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    const tab = await captureTarget(tabId)
+    pending = { kind: 'capture', req, tabId: tab.id, documentId }
+    if (blockedIfRestricted(tab.url)) return
+    checkOrigin(tab, req.origin)
+    post({ type: 'OCR_STATUS', stage: 'capturing' })
     // captureVisibleTab returns CLEAN composited pixels — taint-free even over
     // cross-origin <video> (the YouTube-code case). See research §2.4.
-    const fullDataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
+    const fullDataUrl = await captureTab(tab.id!, tab.windowId, documentId)
     const cropDataUrl = await cropRegion(fullDataUrl, req)
 
     await ensureOffscreen()
@@ -220,6 +340,7 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
       mode: req.mode,
     }
     await chrome.runtime.sendMessage(runMsg)
+    pending = null
   } catch (err) {
     postCaptureError(err, req.origin)
   }
@@ -229,10 +350,12 @@ async function handleCapture(req: CaptureRequest): Promise<void> {
 async function handleViewport(msg: CaptureViewport): Promise<void> {
   pending = { kind: 'viewport', msg }
   try {
-    const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-    if (blockedIfRestricted(active?.url)) return
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
-    const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
+    const active = await captureTarget(msg.tabId)
+    pending = { kind: 'viewport', msg: { ...msg, tabId: active.id } }
+    if (blockedIfRestricted(active.url)) return
+    checkOrigin(active, msg.origin)
+    post({ type: 'OCR_STATUS', stage: 'capturing' })
+    const dataUrl = await captureTab(active.id!, active.windowId)
     await ensureOffscreen()
     const runMsg: RunOcr = {
       type: 'RUN_OCR',
@@ -241,6 +364,7 @@ async function handleViewport(msg: CaptureViewport): Promise<void> {
       mode: msg.mode,
     }
     await chrome.runtime.sendMessage(runMsg)
+    pending = null
   } catch (err) {
     postCaptureError(err, msg.origin)
   }
@@ -252,20 +376,23 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
   try {
     const tab = await chrome.tabs.get(msg.tabId)
     if (blockedIfRestricted(tab.url)) return
+    checkOrigin(tab, msg.origin)
     if (tab.id === undefined) {
-      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'The tab to capture is no longer available.' })
+      pending = null
+      post({ type: 'OCR_STATUS', stage: 'error', message: 'The tab to capture is no longer available.' })
       return
     }
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    post({ type: 'OCR_STATUS', stage: 'capturing' })
     const { tiles, truncated } = await captureFullPage(tab.id, tab.windowId, (t) =>
-      chrome.runtime.sendMessage({
+      post({
         type: 'OCR_STATUS',
         stage: 'capturing',
         message: `Capturing page… tile ${t}`,
       }),
     )
     if (!tiles.length) {
-      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'Nothing to capture on this page.' })
+      pending = null
+      post({ type: 'OCR_STATUS', stage: 'error', message: 'Nothing to capture on this page.' })
       return
     }
     await ensureOffscreen()
@@ -276,6 +403,7 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
       truncated,
     }
     await chrome.runtime.sendMessage(runMsg)
+    pending = null
   } catch (err) {
     postCaptureError(err, msg.origin)
   }
@@ -289,7 +417,7 @@ async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
   try {
     const tab = await chrome.tabs.get(msg.tabId).catch(() => undefined)
     if (blockedIfRestricted(tab?.url)) return
-    chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'capturing' })
+    post({ type: 'OCR_STATUS', stage: 'capturing' })
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: msg.tabId },
       // Self-contained (classic script): serialize the HTML and extract the pixels
@@ -325,18 +453,20 @@ async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
       | { html: string; title: string; url: string; images: { src: string; dataUrl: string }[] }
       | undefined
     if (!page) {
-      chrome.runtime.sendMessage({ type: 'OCR_STATUS', stage: 'error', message: 'Could not read this page.' })
+      pending = null
+      post({ type: 'OCR_STATUS', stage: 'error', message: 'Could not read this page.' })
       return
     }
     // The panel OCRs readable images for hybrid captions — it needs the engine alive.
     if (page.images?.length) await ensureOffscreen()
-    chrome.runtime.sendMessage({
+    post({
       type: 'PAGE_HTML',
       html: page.html,
       title: page.title,
       url: page.url,
       images: page.images ?? [],
     })
+    pending = null
   } catch (err) {
     postCaptureError(err, msg.origin)
   }
@@ -373,8 +503,21 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-/** Only one offscreen document may exist per extension — check before creating. */
+let offscreenCreating: Promise<void> | undefined
+
+/** Creation is shared by capture, clipboard, and panel-owned PDF requests. */
 async function ensureOffscreen(): Promise<void> {
+  if (offscreenCreating) return offscreenCreating
+  offscreenCreating = createOffscreen()
+  try {
+    await offscreenCreating
+  } finally {
+    offscreenCreating = undefined
+  }
+}
+
+/** Only one offscreen document may exist per extension — check before creating. */
+async function createOffscreen(): Promise<void> {
   const url = chrome.runtime.getURL(OFFSCREEN_PATH)
   const existing = (await chrome.runtime.getContexts({
     contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
@@ -384,7 +527,7 @@ async function ensureOffscreen(): Promise<void> {
 
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_PATH,
-    reasons: [chrome.offscreen.Reason.WORKERS],
-    justification: 'Run local OCR (ONNX Runtime) in a dedicated worker off the service worker.',
+    reasons: [chrome.offscreen.Reason.WORKERS, chrome.offscreen.Reason.CLIPBOARD],
+    justification: 'Run local OCR and copy requested text to the clipboard without requiring panel focus.',
   })
 }

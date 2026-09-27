@@ -34,26 +34,21 @@
           <path d="M5 9.5V20h14V9.5" />
         </svg>
       </button>
-      <button id="history-btn" class="icon-btn" type="button" title="History" aria-label="Capture history">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 3" />
-        </svg>
-      </button>
     </header>
+
+    <nav class="capture-toolbar" aria-label="Capture actions">
+      <button id="select-btn" class="btn btn-primary" type="button">Select area</button>
+      <button id="capture-viewport" class="btn btn-secondary" type="button">Viewport</button>
+      <button id="capture-fullpage" class="btn btn-secondary" type="button" title="Capture full page as Text/Code">Full page</button>
+    </nav>
+    <p id="clipboard-status" class="action-status" role="status" aria-live="polite"></p>
 
     <!-- IDLE -->
     <section id="state-idle" class="state">
-      <div class="capture-target" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M7 8h7" />
-          <path d="M7 12h10" />
-          <path d="M7 16h5" />
-        </svg>
-      </div>
       <div class="idle-copy">
-        <h1>Extract text from anything</h1>
-        <p class="hint">Capture any region of the page — code, prose, or a screenshot of text — and OCR it locally.</p>
+        <span class="local-label">ON YOUR DEVICE</span>
+        <h1>Capture. Check. Copy.</h1>
+        <p class="hint">Choose an area, the visible page, or the full page using the buttons above.</p>
       </div>
       <!-- Mode is a precondition of "Select region", so it sits above the button. -->
       <div class="mode-group">
@@ -85,19 +80,6 @@
           works offline afterwards. Built-in Latin never touches the network.
         </p>
       </div>
-      <button id="select-btn" class="btn btn-primary big" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-        </svg>
-        Select region
-      </button>
-      <div class="capture-extra">
-        <button id="capture-viewport" class="btn btn-secondary" type="button">Capture viewport</button>
-        <button id="capture-fullpage" class="btn btn-secondary" type="button">Capture full page</button>
-      </div>
       <!-- Reads the page DOM → Markdown (structure, not OCR). -->
       <button id="page-md" class="btn btn-secondary wide" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -116,6 +98,9 @@
         paste, or drop one here
       </p>
       <input id="image-input" type="file" accept="image/*" hidden />
+      <button id="open-pdf" class="btn btn-secondary wide" type="button">Open PDF</button>
+      <input id="pdf-input" type="file" accept="application/pdf,.pdf" hidden />
+        <p class="hint pdf-help">Read every page without scrolling. For embedded PDFs, save the file from its viewer first.</p>
       <!-- Fixed review link — quiet, always available. -->
       <div id="review-idle" class="review-link">
         <span id="review-idle-label" class="review-link-label">Enjoying OCR Buddy? Rate it</span>
@@ -148,6 +133,7 @@
           <path d="M4 4l7 16 2-7 7-2z" />
         </svg>
         <span>Drag over the text on the page. <kbd>Esc</kbd> or click to cancel.</span>
+        <button id="cancel-selection" class="btn btn-secondary btn-sm" type="button">Cancel</button>
       </div>
     </section>
 
@@ -258,6 +244,27 @@
       </div>
     </section>
 
+    <section id="state-pdf" class="state" hidden>
+      <h2>Read PDF locally</h2>
+      <p id="pdf-name" class="hint"></p>
+      <div class="pdf-range">
+        <label>From page <input id="pdf-first" type="number" min="1" step="1" value="1" /></label>
+        <label>To page <input id="pdf-last" type="number" min="1" step="1" placeholder="Last page" /></label>
+      </div>
+      <label class="hist-toggle"><input id="pdf-force-ocr" type="checkbox" /> OCR every page, including pages with selectable text</label>
+      <p class="hint">Text is extracted when available; scanned pages use OCR. For mixed text and images, choose OCR every page. Maximum 50 MB and 300 pages. The document stays in memory until this panel closes or another PDF is opened.</p>
+      <div class="actions">
+        <button id="pdf-read" class="btn btn-primary" type="button">Read pages</button>
+        <button id="pdf-cancel" class="btn btn-secondary" type="button" disabled>Cancel</button>
+      </div>
+      <p id="pdf-progress" class="action-status" role="status" aria-live="polite"></p>
+      <pre id="pdf-text" class="md-pre" tabindex="0"></pre>
+      <div class="actions">
+        <button id="pdf-copy" class="btn btn-primary" type="button" disabled>Copy text</button>
+        <button id="pdf-save" class="btn btn-secondary" type="button" disabled>Save .txt</button>
+      </div>
+    </section>
+
     <!-- ERROR -->
     <section id="state-error" class="state" hidden>
       <div class="error-icon" aria-hidden="true">
@@ -288,6 +295,12 @@
         <input id="hist-enabled" type="checkbox" checked />
         Save captures to history
       </label>
+      <div class="history-actions">
+        <label class="hist-toggle"><input id="hist-select-all" type="checkbox" /> Select all</label>
+        <button id="hist-copy" class="btn btn-secondary btn-sm" type="button" disabled>Copy selected</button>
+        <button id="hist-export" class="btn btn-secondary btn-sm" type="button" disabled>Save .txt</button>
+      </div>
+      <p id="hist-selection-count" class="hint" role="status">0 selected · copied oldest first</p>
       <div id="hist-list" class="hist-list"></div>
       <p id="hist-empty" class="hint" hidden>No saved captures yet.</p>
       <button id="hist-clear" class="btn btn-secondary" type="button">Clear history</button>
@@ -346,6 +359,24 @@
       </div>
     </section>
 
+    <footer class="panel-footer">
+      <div class="footer-links">
+        <button id="history-btn" class="btn btn-secondary" type="button">History</button>
+        <button id="updates-btn" class="linklike" type="button">What's new</button>
+      </div>
+      <details id="quick-settings">
+        <summary>Settings &amp; shortcuts</summary>
+        <label for="icon-action">Toolbar icon</label>
+        <select id="icon-action" class="lang-select">
+          <option value="panel">Open panel</option>
+          <option value="select">Select area</option>
+        </select>
+        <label class="hist-toggle"><input id="auto-copy" type="checkbox" /> Copy new results automatically</label>
+        <p class="hint">Optional clipboard write access. OCR Buddy never reads your clipboard in the background.</p>
+        <button id="shortcuts-btn" class="btn btn-secondary btn-sm" type="button">Configure keyboard shortcuts</button>
+        <p id="shortcut-list" class="hint"></p>
+      </details>
+    </footer>
     <script type="module" src="./sidepanel.ts"></script>
   </body>
 </html>

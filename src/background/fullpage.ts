@@ -18,6 +18,8 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 interface PageMetrics {
   scrollHeight: number
   innerHeight: number
+  innerWidth: number
+  scrollX: number
   scrollY: number
 }
 
@@ -25,36 +27,102 @@ function readMetrics(): PageMetrics {
   return {
     scrollHeight: document.documentElement.scrollHeight,
     innerHeight: window.innerHeight,
+    innerWidth: window.innerWidth,
+    scrollX: window.scrollX,
     scrollY: window.scrollY,
   }
 }
 
-function scrollPage(y: number): void {
-  window.scrollTo(0, y)
+function scrollPage(x: number, y: number): Promise<void> {
+  // Native instant overrides CSS smooth scrolling for this call only. Do not
+  // change the page's styles (including during an abort or navigation).
+  window.scrollTo({ left: x, top: y, behavior: 'instant' })
+  return new Promise((resolve, reject) => {
+    let frame = 0
+    let stable = 0
+    const timeout = setTimeout(() => {
+      cancelAnimationFrame(frame)
+      reject(new Error('Page scrolling did not settle. Capture cancelled.'))
+    }, 1500)
+    const check = () => {
+      const root = document.documentElement
+      const targetX = Math.max(0, Math.min(x, root.scrollWidth - window.innerWidth))
+      const targetY = Math.max(0, Math.min(y, root.scrollHeight - window.innerHeight))
+      stable = Math.abs(window.scrollX - targetX) < 1 && Math.abs(window.scrollY - targetY) < 1 ? stable + 1 : 0
+      if (stable >= 2) {
+        clearTimeout(timeout)
+        resolve()
+      } else frame = requestAnimationFrame(check)
+    }
+    frame = requestAnimationFrame(check)
+  })
 }
 
-// Note: `(...a: never[]) => T` is the standard but unsound workaround for executeScript's func param, relying on the cast at the call site.
-async function inject<T>(tabId: number, func: (...a: never[]) => T, ...args: unknown[]): Promise<T> {
+async function inject<Args extends unknown[], T>(
+  target: chrome.scripting.InjectionTarget, func: (...args: Args) => T, ...args: Args
+) {
   const [res] = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: func as (...a: unknown[]) => T,
+    target,
+    func,
     args,
   })
   if (!res) throw new Error('Page script injection returned no result (tab closed or navigated).')
-  return res.result as T
+  return res
 }
 
-/** One captureVisibleTab with a single retry on the rate-limit error. */
-async function captureOnce(windowId: number): Promise<string> {
-  try {
-    return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
-  } catch (err) {
-    if (/MAX_CAPTURE|too many|quota/i.test(String(err))) {
-      await wait(1000)
-      return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
-    }
-    throw err
+/** Chrome captures a WINDOW's active tab, never a tab ID. Latch switches and
+ * navigation, including switch-away-and-back during the asynchronous screenshot. */
+async function withCaptureTab<T>(
+  tabId: number, windowId: number,
+  run: (capture: () => Promise<string>, check: () => Promise<void>) => Promise<T>,
+): Promise<T> {
+  let changed = false
+  const activated = (info: chrome.tabs.TabActiveInfo) => {
+    if (info.windowId === windowId && info.tabId !== tabId) changed = true
   }
+  const updated = (id: number, info: chrome.tabs.TabChangeInfo) => {
+    if (id === tabId && (info.status === 'loading' || info.url !== undefined)) changed = true
+  }
+  const removed = (id: number) => { if (id === tabId) changed = true }
+  chrome.tabs.onActivated.addListener(activated)
+  chrome.tabs.onUpdated.addListener(updated)
+  chrome.tabs.onRemoved.addListener(removed)
+  const check = async () => {
+    const [active] = await chrome.tabs.query({ active: true, windowId })
+    if (changed || active?.id !== tabId) {
+      throw new Error('The capture tab changed or navigated. Return to the intended page and try again.')
+    }
+  }
+  const capture = async () => {
+    for (let attempt = 0; ; attempt++) {
+      await check()
+      try {
+        const pixels = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
+        await check() // Discard pixels if Chrome captured during a tab switch.
+        return pixels
+      } catch (err) {
+        if (attempt !== 0 || !/MAX_CAPTURE|too many|quota/i.test(String(err))) throw err
+        await wait(1000) // The next iteration checks identity again before retrying.
+      }
+    }
+  }
+  try {
+    await check()
+    return await run(capture, check)
+  } finally {
+    chrome.tabs.onActivated.removeListener(activated)
+    chrome.tabs.onUpdated.removeListener(updated)
+    chrome.tabs.onRemoved.removeListener(removed)
+  }
+}
+
+/** Shared viewport/region screenshot guard. An overlay supplies its document ID
+ * so a late selection or permission retry cannot capture a replacement page. */
+export async function captureTab(tabId: number, windowId: number, documentId?: string): Promise<string> {
+  return withCaptureTab(tabId, windowId, async (capture) => {
+    if (documentId) await inject({ tabId, documentIds: [documentId] }, () => true)
+    return capture()
+  })
 }
 
 export interface FullPageResult {
@@ -69,23 +137,40 @@ export async function captureFullPage(
   windowId: number,
   onProgress?: (tile: number) => void,
 ): Promise<FullPageResult> {
-  const m = await inject(tabId, readMetrics)
-  const step = Math.max(1, m.innerHeight - OVERLAP)
-  const tiles: string[] = []
-  let truncated = false
-
-  let i = 0
-  for (let y = 0; y < m.scrollHeight; y += step, i++) {
-    if (i >= MAX_TILES) {
-      truncated = true
-      break
+  return withCaptureTab(tabId, windowId, async (capture, check) => {
+    const initial = await inject({ tabId }, readMetrics)
+    const m = initial.result
+    if (!m || !initial.documentId || m.innerHeight <= 0) throw new Error('Could not measure the capture page.')
+    const target = { tabId, documentIds: [initial.documentId] }
+    const tiles: string[] = []
+    let y = 0
+    try {
+      for (let i = 0; i < MAX_TILES; i++) {
+        await check()
+        await inject(target, scrollPage, 0, y)
+        await wait(SETTLE_MS)
+        const before = (await inject(target, readMetrics)).result!
+        if (Math.abs(before.scrollY - y) >= 1 || Math.abs(before.scrollX) >= 1) {
+          throw new Error('Page scrolled during capture. Please try again.')
+        }
+        const pixels = await capture()
+        const after = (await inject(target, readMetrics)).result!
+        if (before.scrollY !== after.scrollY || before.scrollX !== after.scrollX ||
+            before.innerHeight !== after.innerHeight || before.innerWidth !== after.innerWidth) {
+          throw new Error('Page moved or resized during capture. Please try again.')
+        }
+        tiles.push(pixels)
+        onProgress?.(tiles.length)
+        // Stop on the last viewport, not scrollHeight: clamped scrolling otherwise
+        // repeats bottom tiles and incorrectly marks an exactly-20-tile page cut off.
+        if (after.scrollY + after.innerHeight >= after.scrollHeight - 1) return { tiles, truncated: false }
+        y = Math.min(after.scrollY + Math.max(1, after.innerHeight - OVERLAP), after.scrollHeight - after.innerHeight)
+      }
+      return { tiles, truncated: true }
+    } finally {
+      // documentIds pins cleanup to the original document, even on same-URL reload.
+      // A closed/navigated tab cannot be restored; never scroll its replacement.
+      await inject(target, scrollPage, m.scrollX, m.scrollY).catch(() => {})
     }
-    await inject(tabId, scrollPage, y)
-    await wait(SETTLE_MS)
-    tiles.push(await captureOnce(windowId))
-    onProgress?.(i + 1)
-  }
-
-  await inject(tabId, scrollPage, m.scrollY) // restore
-  return { tiles, truncated }
+  })
 }

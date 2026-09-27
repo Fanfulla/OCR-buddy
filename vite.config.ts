@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import { crx } from '@crxjs/vite-plugin'
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, cpSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import manifest from './src/manifest.config'
 
@@ -23,6 +23,26 @@ function copyOrtWasm(): Plugin {
       const dest = join(process.cwd(), 'dist/ort')
       mkdirSync(dest, { recursive: true })
       for (const f of files) copyFileSync(join(src, f), join(dest, f))
+      // The website and installed extension share exactly the same release notes.
+      copyFileSync(join(process.cwd(), 'site/changelog.html'), join(process.cwd(), 'dist/updates.html'))
+    },
+  }
+}
+
+// PDF processing stays offline, including the worker and uncommon PDF fonts/codecs.
+function copyPdfAssets(): Plugin {
+  return {
+    name: 'copy-pdf-assets',
+    apply: 'build',
+    closeBundle() {
+      const src = join(process.cwd(), 'node_modules/pdfjs-dist')
+      const dest = join(process.cwd(), 'dist/pdfjs')
+      mkdirSync(dest, { recursive: true })
+      copyFileSync(join(src, 'legacy/build/pdf.worker.min.mjs'), join(dest, 'pdf.worker.min.mjs'))
+      for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
+        cpSync(join(src, dir), join(dest, dir), { recursive: true })
+      }
+      copyFileSync(join(src, 'LICENSE'), join(dest, 'LICENSE'))
     },
   }
 }
@@ -30,7 +50,7 @@ function copyOrtWasm(): Plugin {
 // CRXJS wires up MV3: builds the service worker, offscreen doc, side panel,
 // content script, and auto-manages web_accessible_resources / HMR.
 export default defineConfig({
-  plugins: [crx({ manifest }), copyOrtWasm()],
+  plugins: [crx({ manifest }), copyOrtWasm(), copyPdfAssets()],
   build: {
     target: 'esnext', // top-level await + modern WASM/WebGPU
     rollupOptions: {

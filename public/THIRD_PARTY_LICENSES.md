@@ -16,9 +16,15 @@ reproduced here — apply to those components.
 | [onnxruntime-web](https://github.com/microsoft/onnxruntime) | In-browser model runtime (WebGPU/WASM) | MIT |
 | [KaTeX](https://github.com/KaTeX/KaTeX) | LaTeX rendering (Formula guardrail) | MIT |
 | [highlight.js](https://github.com/highlightjs/highlight.js) | Syntax highlighting (Code view) | BSD-3-Clause |
+| [PDF.js 5.5.207](https://github.com/mozilla/pdf.js/tree/v5.5.207) | Local PDF text extraction and rendering | Apache-2.0 |
 
 Model file provenance and pinned versions are documented in
 `models/SOURCE.md` (shipped alongside the model files).
+
+PDF.js is Copyright Mozilla Foundation and individual contributors. Its license
+ships at `pdfjs/LICENSE`. Font, character-map, image-codec and color-profile
+licenses are included alongside their files under `pdfjs/standard_fonts/`,
+`pdfjs/cmaps/`, `pdfjs/wasm/` and `pdfjs/iccs/`.
 
 ---
 

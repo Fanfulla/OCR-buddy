@@ -50,6 +50,12 @@ const langSelect = $<HTMLSelectElement>('lang-select')
 const langNote = $('lang-note')
 let captureMode: CaptureMode = 'quick'
 let lang = 'latin'
+let iconAction: 'panel' | 'select' = 'panel'
+let autoCopy = false
+let prefsLoaded = false
+const iconActionSelect = $<HTMLSelectElement>('icon-action')
+const autoCopyBox = $<HTMLInputElement>('auto-copy')
+const clipboardStatus = $('clipboard-status')
 const MODE_DESC: Record<CaptureMode, string> = {
   quick: 'Text/Code — code, prose, or any text.',
   formula: 'Formula — one equation → LaTeX, rendered beside the crop to verify.',
@@ -70,8 +76,9 @@ function syncPicker(pick: HTMLElement, mode: CaptureMode) {
 // Persist the last-used capture mode + Prose/Code view across panel opens.
 // (PREFS_KEY is shared: the SW reads it for the keyboard-shortcut mode.)
 function savePrefs() {
+  if (!prefsLoaded) return
   void chrome.storage.local.set({
-    [PREFS_KEY]: { captureMode, codeMode, lang, history: historyEnabled } satisfies PanelPrefs,
+    [PREFS_KEY]: { captureMode, codeMode, lang, history: historyEnabled, iconAction, autoCopy } satisfies PanelPrefs,
   })
 }
 async function restorePrefs() {
@@ -83,8 +90,10 @@ async function restorePrefs() {
     }
     if (typeof p?.codeMode === 'boolean') codeMode = p.codeMode
     if (typeof p?.history === 'boolean') historyEnabled = p.history
+    iconAction = p?.iconAction === 'select' ? 'select' : 'panel'
+    autoCopy = p?.autoCopy === true && await chrome.permissions.contains({ permissions: ['clipboardWrite'] })
     // Only restore a pack the select actually offers (stale prefs → default).
-    if (p?.lang && langSelect.querySelector(`option[value="${p.lang}"]`)) lang = p.lang
+    if (p?.lang && [...langSelect.options].some((o) => o.value === p.lang)) lang = p.lang
   } catch {
     /* storage unavailable → keep defaults */
   }
@@ -92,7 +101,56 @@ async function restorePrefs() {
   modeDesc.textContent = MODE_DESC[captureMode]
   syncLang()
   setMode(codeMode)
+  iconActionSelect.value = iconAction
+  autoCopyBox.checked = autoCopy
+  prefsLoaded = true
 }
+
+iconActionSelect.addEventListener('change', () => {
+  iconAction = iconActionSelect.value === 'select' ? 'select' : 'panel'
+  savePrefs()
+})
+autoCopyBox.addEventListener('change', async () => {
+  autoCopyBox.disabled = true
+  try {
+    if (autoCopyBox.checked) {
+      autoCopy = await chrome.permissions.request({ permissions: ['clipboardWrite'] })
+      clipboardStatus.textContent = autoCopy ? 'Automatic copy enabled.' : 'Automatic copy needs clipboard write access.'
+    } else {
+      autoCopy = false
+      await chrome.permissions.remove({ permissions: ['clipboardWrite'] })
+      clipboardStatus.textContent = 'Automatic copy disabled.'
+    }
+  } catch {
+    autoCopy = false
+    clipboardStatus.textContent = 'Clipboard access was blocked. Manual Copy is still available.'
+  }
+  autoCopyBox.checked = autoCopy
+  autoCopyBox.disabled = false
+  savePrefs()
+})
+chrome.permissions.onRemoved.addListener((p) => {
+  if (p.permissions?.includes('clipboardWrite')) {
+    autoCopy = false
+    autoCopyBox.checked = false
+    savePrefs()
+  }
+})
+$('shortcuts-btn').addEventListener('click', () => {
+  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })
+})
+$('updates-btn').addEventListener('click', () => {
+  void chrome.tabs.create({ url: chrome.runtime.getURL('updates.html') })
+})
+void chrome.commands.getAll().then((commands) => {
+  $('shortcut-list').textContent = commands
+    .filter((c) => c.name && !c.name.startsWith('_'))
+    .map((c) => `${c.description?.replace('OCR Buddy: ', '')}: ${c.shortcut || 'Not assigned'}`).join(' · ')
+  for (const [name, id] of [['start-capture', 'select-btn'], ['capture-viewport', 'capture-viewport'], ['capture-fullpage', 'capture-fullpage']]) {
+    const shortcut = commands.find((c) => c.name === name)?.shortcut
+    if (shortcut) $(id).title = `${$(id).textContent} (${shortcut})`
+  }
+}).catch(() => { $('shortcut-list').textContent = 'Configure shortcuts in Chrome.' })
 
 /** Reflect the selected pack in the UI; the download note only applies to
  *  non-bundled packs. */
@@ -138,10 +196,16 @@ for (const b of resultPick.querySelectorAll<HTMLButtonElement>('.mode-btn')) {
   })
 }
 
-type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'restricted' | 'history' | 'markdown'
-const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'restricted', 'history', 'markdown']
+type State = 'idle' | 'busy' | 'result' | 'error' | 'permission' | 'restricted' | 'history' | 'markdown' | 'pdf'
+const STATES: State[] = ['idle', 'busy', 'result', 'error', 'permission', 'restricted', 'history', 'markdown', 'pdf']
+let currentState: State = 'idle'
+let pdfController: AbortController | null = null
+let selectionPending = false
 const setState = (s: State) => {
+  currentState = s
+  if (s !== 'busy') selectionPending = false
   for (const name of STATES) $(`state-${name}`).hidden = name !== s
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.capture-toolbar button, #home-btn, #history-btn')) b.disabled = s === 'busy' || pdfController !== null
 }
 
 const permOrigin = $('perm-origin')
@@ -182,6 +246,7 @@ const STAGE: Record<Exclude<OcrStage, 'error'>, StageView> = {
 }
 
 function showStage(stage: Exclude<OcrStage, 'error'>, progress?: number) {
+  selectionPending = stage === 'selecting'
   const v = STAGE[stage] ?? { label: stage, pct: 50, spin: true }
   // A 0..1 progress on loading-model means a language pack is downloading
   // (first use only — cached afterwards). Say so instead of the generic label.
@@ -199,6 +264,8 @@ function showStage(stage: Exclude<OcrStage, 'error'>, progress?: number) {
 }
 
 function startSelection() {
+  if (currentState === 'busy') return
+  selectionPending = true
   chrome.runtime.sendMessage({ type: 'START_SELECTION', mode: captureMode } satisfies StartSelection)
   busyLabel.textContent = 'Starting…'
   progressFill.style.width = '8%'
@@ -212,6 +279,11 @@ for (const id of ['select-btn', 'new-capture', 'retry-btn']) {
   $<HTMLButtonElement>(id).addEventListener('click', startSelection)
 }
 
+$('cancel-selection').addEventListener('click', () => {
+  void chrome.runtime.sendMessage({ type: 'CANCEL_SELECTION' }).catch(() => {})
+  setState(lastResult ? 'result' : 'idle')
+})
+
 async function activeTab(): Promise<{ id?: number; origin: string }> {
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
@@ -222,6 +294,7 @@ async function activeTab(): Promise<{ id?: number; origin: string }> {
 }
 
 function startBusy(label: string): void {
+  selectionPending = false
   busyLabel.textContent = label
   progressFill.style.width = '8%'
   spinnerEl.hidden = false
@@ -232,10 +305,15 @@ function startBusy(label: string): void {
 
 $<HTMLButtonElement>('capture-viewport').addEventListener('click', async () => {
   startBusy('Capturing viewport…')
-  const { origin } = await activeTab()
+  const { id, origin } = await activeTab()
+  if (id === undefined) {
+    errorMsg.textContent = 'No active tab to capture.'
+    setState('error')
+    return
+  }
   // Empty origin (e.g. chrome:// pages) intentionally lets the SW fall back to
   // the all-sites permission prompt — same behaviour as the region-capture flow.
-  chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT', mode: captureMode, origin })
+  chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT', tabId: id, mode: captureMode, origin })
 })
 
 $<HTMLButtonElement>('capture-fullpage').addEventListener('click', async () => {
@@ -279,16 +357,13 @@ function renderMarkdown(html: string, title: string, url: string, ocrBySrc?: Map
   mdTitle.textContent = lastMdTitle
   mdPre.textContent = lastMarkdown
   setState('markdown')
+  void copyAutomatically(lastMarkdown)
 }
 
 $<HTMLButtonElement>('md-back').addEventListener('click', () => setState(lastResult ? 'result' : 'idle'))
 
 $<HTMLButtonElement>('md-copy').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(lastMarkdown)
-  } catch {
-    /* clipboard blocked — the <pre> is selectable as a fallback */
-  }
+  await copyText(lastMarkdown)
 })
 
 $<HTMLButtonElement>('md-download').addEventListener('click', () => {
@@ -301,8 +376,15 @@ $<HTMLButtonElement>('md-download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 })
 
-chrome.runtime.onMessage.addListener((msg: Message) => {
-  if (msg.type === 'PAGE_HTML') {
+chrome.runtime.onMessage.addListener((msg: Message, _sender, respond) => {
+  if (msg.type === 'PANEL_READY') {
+    respond({ ok: true, busy: currentState === 'busy' || pdfController !== null })
+    return false
+  }
+  if (pdfController && (msg.type === 'OCR_STATUS' || msg.type === 'OCR_RESULT')) return false
+  if (msg.type === 'SELECTION_CANCELLED') {
+    if (currentState === 'busy' && (selectionPending || !selectingNote.hidden)) setState(lastResult ? 'result' : 'idle')
+  } else if (msg.type === 'PAGE_HTML') {
     // No readable images → convert straight away. Otherwise OCR them first
     // (hybrid), then convert with captions once PAGE_IMAGES_OCR arrives.
     if (msg.images.length === 0) {
@@ -423,6 +505,8 @@ function renderResult(r: OcrResult, save = true) {
   copyBtn.querySelector('.copy-label')!.textContent = copyLabelFor(r.mode)
   renderText()
   setState('result')
+  clipboardStatus.textContent = ''
+  if (save && !r.empty && (r.mode !== 'formula' || textEl.querySelector('.doc-eq-render'))) void copyAutomatically(resultPayload())
   // Review nudge: only on a FRESH, non-empty capture — never on history restores
   // (save === false) and never after a poor read (empty).
   reviewNudge.hidden = true
@@ -622,16 +706,41 @@ const CHECK_ICON = '<polyline points="20 6 9 17 4 12"></polyline>'
 const copyLabelFor = (mode?: CaptureMode) =>
   mode === 'formula' ? 'Copy LaTeX' : mode === 'table' ? 'Copy Markdown' : 'Copy text'
 
-copyBtn.addEventListener('click', async () => {
+function resultPayload(): string {
   // Copy the source, not the rendered DOM: Markdown for documents, raw LaTeX for
   // formulas, plain text otherwise.
-  const payload =
+  return (
     lastResult?.mode === 'table'
       ? (lastResult.docText ?? '')
       : lastResult?.mode === 'formula'
         ? (lastResult.latex ?? '')
-        : (textEl.textContent ?? '')
-  await navigator.clipboard.writeText(payload)
+        : (textEl.innerText ?? ''))
+}
+
+async function copyText(payload: string): Promise<boolean> {
+  if (!payload.trim()) return false
+  try {
+    await navigator.clipboard.writeText(payload)
+    clipboardStatus.textContent = 'Copied to clipboard.'
+    return true
+  } catch {
+    clipboardStatus.textContent = 'Could not copy. Select the text and copy it manually.'
+    return false
+  }
+}
+
+async function copyAutomatically(payload: string): Promise<void> {
+  if (!autoCopy || !payload.trim()) return
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'COPY_TEXT', text: payload })
+    clipboardStatus.textContent = result?.ok ? 'Copied to clipboard.' : 'Automatic copy failed. Click Copy to try again.'
+  } catch {
+    clipboardStatus.textContent = 'Automatic copy failed. Click Copy to try again.'
+  }
+}
+
+copyBtn.addEventListener('click', async () => {
+  if (!await copyText(resultPayload())) return
   const label = copyBtn.querySelector('.copy-label')!
   const icon = copyBtn.querySelector('.ic-copy')!
   label.textContent = 'Copied'
@@ -661,6 +770,40 @@ const histList = $('hist-list')
 const histEmpty = $('hist-empty')
 const histEnabledBox = $<HTMLInputElement>('hist-enabled')
 const histClear = $<HTMLButtonElement>('hist-clear')
+const histSelectAll = $<HTMLInputElement>('hist-select-all')
+const histCopy = $<HTMLButtonElement>('hist-copy')
+const histExport = $<HTMLButtonElement>('hist-export')
+let historyList: HistEntry[] = []
+const selectedHistory = new Set<HistEntry>()
+
+function updateHistorySelection(): void {
+  const n = selectedHistory.size
+  histCopy.disabled = histExport.disabled = n === 0
+  histSelectAll.checked = historyList.length > 0 && n === historyList.length
+  histSelectAll.indeterminate = n > 0 && n < historyList.length
+  histSelectAll.disabled = historyList.length === 0
+  $('hist-selection-count').textContent = `${n} selected · copied oldest first`
+}
+
+function selectedHistoryText(): string {
+  return [...selectedHistory].sort((a, b) => a.ts - b.ts).map(({ result: r }) =>
+    r.mode === 'formula' ? r.latex ?? '' : r.mode === 'table' ? r.docText ?? '' : r.text,
+  ).join('\n\n---\n\n')
+}
+histSelectAll.addEventListener('change', () => {
+  selectedHistory.clear()
+  if (histSelectAll.checked) historyList.forEach((e) => selectedHistory.add(e))
+  histList.querySelectorAll<HTMLInputElement>('.hist-select').forEach((c) => { c.checked = histSelectAll.checked })
+  updateHistorySelection()
+})
+histCopy.addEventListener('click', () => void copyText(selectedHistoryText()))
+histExport.addEventListener('click', () => {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([selectedHistoryText()], { type: 'text/plain;charset=utf-8' }))
+  a.download = 'ocr-buddy-captures.txt'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+})
 
 async function loadHistory(): Promise<HistEntry[]> {
   try {
@@ -693,12 +836,24 @@ function histSnippet(r: OcrResult): string {
 
 async function openHistory(): Promise<void> {
   const list = await loadHistory()
+  historyList = list
+  selectedHistory.clear()
+  updateHistorySelection()
   histEnabledBox.checked = historyEnabled
   histEmpty.hidden = list.length > 0
   histList.replaceChildren()
   for (const e of list) {
     const row = document.createElement('div')
     row.className = 'hist-row'
+    const select = document.createElement('input')
+    select.type = 'checkbox'
+    select.className = 'hist-select'
+    select.setAttribute('aria-label', `Select capture from ${new Date(e.ts).toLocaleString()}`)
+    select.addEventListener('change', () => {
+      if (select.checked) selectedHistory.add(e)
+      else selectedHistory.delete(e)
+      updateHistorySelection()
+    })
 
     const open = document.createElement('button')
     open.type = 'button'
@@ -730,7 +885,7 @@ async function openHistory(): Promise<void> {
       void openHistory()
     })
 
-    row.append(open, del)
+    row.append(select, open, del)
     histList.appendChild(row)
   }
   setState('history')
@@ -764,6 +919,7 @@ function ocrDataUrl(imageDataUrl: string): void {
 }
 
 function ocrImageFile(file: File): void {
+  if (currentState === 'busy' || pdfController) return
   const fr = new FileReader()
   fr.onload = () => ocrDataUrl(fr.result as string)
   fr.readAsDataURL(file)
@@ -791,10 +947,99 @@ document.addEventListener('dragover', (e) => {
 })
 document.addEventListener('drop', (e) => {
   const f = e.dataTransfer?.files?.[0]
-  if (f?.type.startsWith('image/')) {
+  if (f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name))) {
+    e.preventDefault()
+    openPdf(f)
+  } else if (f?.type.startsWith('image/')) {
     e.preventDefault()
     ocrImageFile(f)
   }
+})
+
+// PDF bytes and extracted text are kept in this panel only, never in history.
+let pdfFile: File | null = null
+let pdfText = ''
+const pdfInput = $<HTMLInputElement>('pdf-input')
+const pdfRead = $<HTMLButtonElement>('pdf-read')
+const pdfCancel = $<HTMLButtonElement>('pdf-cancel')
+const pdfCopy = $<HTMLButtonElement>('pdf-copy')
+const pdfSave = $<HTMLButtonElement>('pdf-save')
+const pdfProgress = $('pdf-progress')
+function openPdf(file: File): void {
+  if (currentState === 'busy' || pdfController) return
+  pdfFile = file
+  pdfText = ''
+  $('pdf-name').textContent = file.name
+  $('pdf-text').textContent = ''
+  pdfProgress.textContent = ''
+  $<HTMLInputElement>('pdf-first').value = '1'
+  $<HTMLInputElement>('pdf-last').value = ''
+  pdfRead.disabled = file.size > 50_000_000
+  if (pdfRead.disabled) pdfProgress.textContent = 'This PDF exceeds the 50 MB limit.'
+  pdfCopy.disabled = pdfSave.disabled = true
+  setState('pdf')
+}
+$('open-pdf').addEventListener('click', () => pdfInput.click())
+pdfInput.addEventListener('change', () => {
+  const f = pdfInput.files?.[0]
+  if (f) openPdf(f)
+  pdfInput.value = ''
+})
+pdfRead.addEventListener('click', async () => {
+  if (!pdfFile || pdfController) return
+  const controller = new AbortController()
+  pdfController = controller
+  pdfRead.disabled = true
+  pdfCancel.disabled = false
+  pdfCopy.disabled = pdfSave.disabled = true
+  pdfText = ''
+  $('pdf-text').textContent = ''
+  pdfProgress.textContent = 'Opening PDF on this device…'
+  const firstPage = Number($<HTMLInputElement>('pdf-first').value)
+  const lastValue = $<HTMLInputElement>('pdf-last').value
+  const forceOcr = $<HTMLInputElement>('pdf-force-ocr').checked
+  const pdfLang = lang
+  setState('pdf')
+  try {
+    const { readPdf } = await import('./pdf')
+    const result = await readPdf(new Uint8Array(await pdfFile.arrayBuffer()), {
+      signal: controller.signal, firstPage, lastPage: lastValue ? Number(lastValue) : undefined, forceOcr,
+      onProgress: (page, total) => { pdfProgress.textContent = `Reading page ${page} of ${total}…` },
+      ocr: async (imageDataUrl) => {
+        const ready = await chrome.runtime.sendMessage({ type: 'ENSURE_OFFSCREEN' })
+        if (!ready?.ok) throw new Error('Could not start local OCR.')
+        const out = await chrome.runtime.sendMessage({ type: 'PDF_OCR_IMAGE', imageDataUrl, lang: pdfLang })
+        if (out?.error || typeof out?.text !== 'string') throw new Error(out?.error || 'No OCR result for this page.')
+        return out.text
+      },
+    })
+    controller.signal.throwIfAborted()
+    pdfText = result.text
+    $('pdf-text').textContent = pdfText
+    pdfProgress.textContent = `Read ${result.pages} pages (${result.ocrPages} with OCR). Check the result against the PDF.`
+    pdfCopy.disabled = pdfSave.disabled = !pdfText.trim()
+    void copyAutomatically(pdfText)
+  } catch (err) {
+    pdfProgress.textContent = controller.signal.aborted ? 'Cancelled. No partial result was saved.' : `Could not read PDF: ${err instanceof Error ? err.message : String(err)}`
+  } finally {
+    pdfController = null
+    pdfRead.disabled = false
+    pdfCancel.disabled = true
+    setState('pdf')
+  }
+})
+pdfCancel.addEventListener('click', () => {
+  pdfController?.abort()
+  pdfCancel.disabled = true
+  pdfProgress.textContent = 'Cancelling…'
+})
+pdfCopy.addEventListener('click', () => void copyText(pdfText))
+pdfSave.addEventListener('click', () => {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([pdfText], { type: 'text/plain;charset=utf-8' }))
+  a.download = 'ocr-buddy-pdf.txt'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 })
 
 // Version next to the brand, read from the manifest so it can't drift.

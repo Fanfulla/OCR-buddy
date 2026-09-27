@@ -89,6 +89,45 @@ Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
 
 ---
 
+## Quick actions (2.6)
+
+Area, Viewport and Full page stay at the top of the panel, including after a
+result. History and Settings & shortcuts are at the bottom. Chrome's extension
+shortcut settings let you assign independent viewport and full-page shortcuts;
+the existing area shortcut remains Ctrl+Shift+Y (Command+Shift+Y on macOS).
+
+The toolbar icon still opens the panel by default. Choose **Select area** in
+settings to start selection immediately. **Automatic copy** is off by default:
+enabling it requests optional `clipboardWrite` access. It writes new results,
+never reads the clipboard in the background, and reports failed writes. System
+clipboard history/sync is controlled by your operating system.
+
+In History, select several captures to copy or save their text together, oldest
+first, with separators. Existing history and settings are preserved.
+
+## Local PDF reading
+
+**Open PDF** (or drop a PDF into the panel) reads a local file without scrolling
+through its viewer. Select all pages or a page range. Existing text is extracted;
+pages without text use the same local OCR engine. Choose **OCR every page** for
+mixed text and image pages. Progress and cancellation are available.
+
+Limits: 50 MB and 300 pages. Save an embedded PDF from its viewer first, then open
+the file in OCR Buddy. Automatic access to arbitrary embedded viewers is not
+supported. Complex layouts and OCR output need visual verification. PDF bytes
+and results remain in panel memory and are not added to capture history.
+
+PDF.js, its worker, fonts and codecs are bundled. No document or page image is
+uploaded; no remote scripts, fonts or PDF-processing services are used.
+
+## Release notes
+
+A local copy of the [website changelog](https://ocr-buddy.com/changelog) opens
+after a version-changing extension update. It is also available through
+**What's new**. The page has no analytics or remote assets, and links to GitHub/X
+are opened only on user clicks. `site/changelog.html` is the single source copied
+to `dist/updates.html` by the production build; update it with each release.
+
 ## Capture sources
 
 Region-select is precise, but dragging a box is overkill when you just want
@@ -294,6 +333,11 @@ node scripts/ocr-image-test.mjs    # score real images in test-images/ vs ground
                                    #   (a <lang>__ filename prefix picks the language pack)
 npm run verify                     # load the built extension in Chromium (Playwright)
 npm run verify:ux                  # end-to-end capture flow (Playwright)
+npm run verify:panel               # panel controls, history and clipboard UI
+npm run verify:pdf                 # local native/scanned PDF integration
+npm run verify:update              # offscreen clipboard and bundled release notes
+npm run test:capture               # tab guards, commands, clipboard and update routing
+npm run test:pdf                   # PDF text layout, ranges and input limits
 ```
 
 ---

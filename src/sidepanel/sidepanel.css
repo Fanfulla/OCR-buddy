@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #1a1a1e;
   --surface: #212127;
   --surface-2: #2a2a31;
@@ -31,10 +32,44 @@ body {
   background: var(--bg);
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+
+.capture-toolbar {
+  position: sticky;
+  top: 56px;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 0;
+  background: var(--bg);
+}
+.capture-toolbar .btn { padding: 9px 4px; font-size: 12px; }
+.btn:disabled, .icon-btn:disabled { opacity: .5; cursor: default; }
+.action-status { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.action-status:not(:empty) { padding: 6px 0; }
+.panel-footer { flex: none; max-height: 45vh; overflow-y: auto; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+.footer-links { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.footer-links > .btn { flex: 1; }
+.panel-footer details { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.panel-footer summary { cursor: pointer; color: var(--muted); }
+.panel-footer details > label { display: flex; margin-top: 12px; }
+.panel-footer select { width: 100%; }
+.history-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.history-actions .hist-toggle { margin: 0; }
+.hist-select { align-self: center; accent-color: var(--accent); }
+.pdf-range { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.pdf-range label { flex: 1; min-width: 100px; }
+.pdf-range input { width: 100%; padding: 7px; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+#pdf-name { overflow-wrap: anywhere; }
 
 /* ---------- Header ---------- */
 header {
+  flex: none;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -109,6 +144,11 @@ header {
 .state {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg);
 }
 /* `display:flex` above would otherwise defeat the [hidden] attribute. */
 .state[hidden] {
@@ -141,6 +181,28 @@ header {
   text-align: center;
   gap: 16px;
   padding: 30px 8px 24px;
+}
+
+#state-idle { align-items: stretch; text-align: left; gap: 14px; padding: 18px 0; }
+#state-idle .idle-copy { align-items: flex-start; gap: 6px; }
+#state-idle h1 { font-size: 23px; letter-spacing: -.04em; }
+#state-idle .hint { max-width: none; font-size: 12px; }
+#state-idle .mode-group { align-items: stretch; gap: 6px; }
+#state-idle .mode-pick { justify-content: stretch; }
+#state-idle .mode-btn { flex: 1; }
+#state-idle .lang-select { max-width: none; width: 100%; }
+#state-idle .mode-desc { max-width: none; font-size: 11.5px; }
+#state-idle .img-hint { margin-top: 0; }
+.local-label { font: 600 10px/1.5 Consolas, monospace; letter-spacing: .12em; color: var(--ok); }
+.pdf-help { color: var(--faint); }
+.panel-footer .hint { max-width: none; font-size: 11.5px; margin: 7px 0; }
+summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn-primary { color: var(--accent-ink); }
+@media (max-width: 340px) {
+  body { padding-left: 10px; padding-right: 10px; }
+  .brand { gap: 5px; font-size: 13px; }
+  .badge { padding-left: 6px; padding-right: 6px; font-size: 9px; }
+  .reinterpret { flex-wrap: wrap; }
 }
 
 .perm-origin {
@@ -438,45 +500,6 @@ kbd {
 }
 
 /* ---------- Idle ---------- */
-.capture-target {
-  width: 100%;
-  max-width: 250px;
-  aspect-ratio: 16 / 9;
-  border: 1.5px dashed var(--border);
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  color: var(--faint);
-  position: relative;
-  background: repeating-linear-gradient(135deg, transparent 0 9px, rgba(255, 255, 255, 0.012) 9px 18px);
-}
-.capture-target::before,
-.capture-target::after {
-  content: "";
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid var(--accent);
-  opacity: 0.55;
-}
-.capture-target::before {
-  top: 12px;
-  left: 12px;
-  border-right: 0;
-  border-bottom: 0;
-  border-radius: 3px 0 0 0;
-}
-.capture-target::after {
-  bottom: 12px;
-  right: 12px;
-  border-left: 0;
-  border-top: 0;
-  border-radius: 0 0 3px 0;
-}
-.capture-target svg {
-  width: 30px;
-  height: 30px;
-}
 .idle-copy {
   display: flex;
   flex-direction: column;
@@ -527,7 +550,7 @@ kbd {
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 6px 16px -8px rgba(79, 156, 255, 0.8);
 }
 .btn-primary:hover {
@@ -1005,15 +1028,6 @@ figure {
 }
 .actions .btn-primary {
   flex: 1.3;
-}
-
-.capture-extra {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-.capture-extra .btn {
-  flex: 1;
 }
 
 .btn.wide {

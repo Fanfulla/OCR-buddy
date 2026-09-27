@@ -18,7 +18,7 @@ const crossOriginIsolation = {
 export default defineManifest({
   manifest_version: 3,
   name: 'OCR Buddy',
-  version: '2.5.6',
+  version: '2.6.0',
   description:
     'Faithful, fully-local OCR. Select a region, get the text — no server, no hallucinations.',
   minimum_chrome_version: '124',
@@ -33,6 +33,12 @@ export default defineManifest({
       // Ctrl+Shift+O is reserved by Chrome (Bookmark Manager); Y is free.
       suggested_key: { default: 'Ctrl+Shift+Y', mac: 'Command+Shift+Y' },
       description: 'OCR Buddy: start region selection',
+    },
+    'capture-viewport': {
+      description: 'OCR Buddy: capture visible page',
+    },
+    'capture-fullpage': {
+      description: 'OCR Buddy: capture full page (Text/Code)',
     },
   },
 
@@ -64,6 +70,7 @@ export default defineManifest({
   // capture a tab they didn't invoke on — so capture works across tabs without a
   // blanket grant. The screenshot (the sensitive action) is gated per origin.
   optional_host_permissions: ['<all_urls>'],
+  optional_permissions: ['clipboardWrite'],
 
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
