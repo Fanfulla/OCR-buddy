@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6.1 - 2026-09-27
+
+### Fixed
+- Long OCR results no longer shrink their container and overlap the capture/copy
+  buttons. The result section scrolls while the text keeps its full height.
+- Added layout regression checks for long prose, code, tables and formulas at
+  narrow and wide panel sizes, including complete clipboard output.
+
 ## 2.6.0 - 2026-09-27
 
 ### Added

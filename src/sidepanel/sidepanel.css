@@ -807,6 +807,8 @@ figure {
 }
 
 .text {
+  /* The result section scrolls; shrinking this box paints text over its actions. */
+  flex-shrink: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

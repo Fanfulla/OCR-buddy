@@ -1,6 +1,6 @@
 {
   "name": "ocr-buddy",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Faithful, fully-local OCR Chrome extension. Select a region, get the text — no server, no hallucinations.",
   "type": "module",
   "private": true,
@@ -15,6 +15,7 @@
     "verify:md": "node scripts/verify-md.mjs",
     "verify:md-images": "node scripts/verify-md-images.mjs",
     "verify:panel": "node scripts/verify-panel-actions.mjs",
+    "verify:layout": "node scripts/verify-result-layout.mjs",
     "verify:pdf": "node scripts/verify-pdf.mjs",
     "verify:update": "node scripts/verify-update-clipboard.mjs",
     "test:merge": "node --experimental-strip-types scripts/test-merge.ts",

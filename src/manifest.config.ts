@@ -18,7 +18,7 @@ const crossOriginIsolation = {
 export default defineManifest({
   manifest_version: 3,
   name: 'OCR Buddy',
-  version: '2.6.0',
+  version: '2.6.1',
   description:
     'Faithful, fully-local OCR. Select a region, get the text — no server, no hallucinations.',
   minimum_chrome_version: '124',
