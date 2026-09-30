@@ -15,9 +15,11 @@ import type { DocBlock, OcrWord } from '../shared/messages'
 
 // Point ORT at the self-hosted wasm/loaders before any session is created.
 ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/')
-// Multi-threaded WASM needs SharedArrayBuffer, available because the host page is
-// cross-origin isolated (COOP/COEP). The WebGPU path ignores this.
-ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4
+// Threaded WASM needs SharedArrayBuffer; browsers without cross-origin isolation
+// use the single-threaded backend. WebGPU does not need this capability.
+ort.env.wasm.numThreads = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
+  ? navigator.hardwareConcurrency || 4
+  : 1
 // Suppress ORT's benign EP-partition warnings (VerifyEachNodeIsAssignedToAnEp:
 // shape ops land on CPU by design). Keeps real errors visible in the panel.
 ort.env.logLevel = 'error'

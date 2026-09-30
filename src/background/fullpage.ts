@@ -140,8 +140,10 @@ export async function captureFullPage(
   return withCaptureTab(tabId, windowId, async (capture, check) => {
     const initial = await inject({ tabId }, readMetrics)
     const m = initial.result
-    if (!m || !initial.documentId || m.innerHeight <= 0) throw new Error('Could not measure the capture page.')
-    const target = { tabId, documentIds: [initial.documentId] }
+    if (!m || m.innerHeight <= 0) throw new Error('Could not measure the capture page.')
+    const target: chrome.scripting.InjectionTarget = initial.documentId
+      ? { tabId, documentIds: [initial.documentId] }
+      : { tabId, frameIds: [initial.frameId] }
     const tiles: string[] = []
     let y = 0
     try {

@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:chrome": "vite build --config vite.config.ts",
+    "build:firefox": "vite build --config vite.config.firefox.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",

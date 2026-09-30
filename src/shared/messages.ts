@@ -227,6 +227,7 @@ export type Message =
   | { type: 'COPY_TEXT'; text: string }
   | { type: 'OFFSCREEN_COPY_TEXT'; text: string }
   | { type: 'ENSURE_OFFSCREEN' }
+  | { type: 'OCR_HOST_PING' }
   | { type: 'PDF_OCR_IMAGE'; imageDataUrl: string; lang?: string }
   | StartSelection
   | ShowOverlay

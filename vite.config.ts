@@ -50,6 +50,7 @@ function copyPdfAssets(): Plugin {
 // CRXJS wires up MV3: builds the service worker, offscreen doc, side panel,
 // content script, and auto-manages web_accessible_resources / HMR.
 export default defineConfig({
+  define: { __FIREFOX_BUILD__: 'false' },
   plugins: [crx({ manifest }), copyOrtWasm(), copyPdfAssets()],
   build: {
     target: 'esnext', // top-level await + modern WASM/WebGPU
