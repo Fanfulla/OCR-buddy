@@ -8,9 +8,8 @@
 import { PREFS_KEY } from '../shared/messages'
 import type { CaptureFullPage, CaptureMode, CaptureRequest, CaptureViewport, ConvertPageMd, Message, PanelPrefs, Restricted, RunOcr, RunOcrTiles, ShowOverlay } from '../shared/messages'
 import { restrictedReason } from '../shared/restricted'
+import { ensureOcrHost, openResultPanel } from '../shared/browser-compat'
 import { captureFullPage, captureTab } from './fullpage'
-
-const OFFSCREEN_PATH = 'src/offscreen/offscreen.html'
 
 // Open before any asynchronous work so Chrome retains the user gesture.
 chrome.action.onClicked.addListener((tab) => {
@@ -55,7 +54,7 @@ function post(msg: Message): void {
 }
 
 async function openPanel(tabId: number): Promise<boolean> {
-  await chrome.sidePanel.open({ tabId })
+  await openResultPanel(tabId)
   // A context existing is not evidence that its JS listener is ready. The panel
   // acknowledges this probe synchronously; retries are bounded and carry no data.
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -154,10 +153,10 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
       if (msg.type === 'COPY_TEXT') {
         if (typeof msg.text !== 'string' || msg.text.length > 2_000_000) throw new Error('Invalid clipboard text (maximum 2,000,000 characters).')
         if (!await chrome.permissions.contains({ permissions: ['clipboardWrite'] })) throw new Error('Clipboard permission has not been granted.')
-        await ensureOffscreen()
+        await ensureOcrHost()
         const reply = await chrome.runtime.sendMessage({ type: 'OFFSCREEN_COPY_TEXT', text: msg.text })
         if (reply?.ok !== true) throw new Error(reply?.error ?? 'Offscreen clipboard did not respond.')
-      } else await ensureOffscreen()
+      } else await ensureOcrHost()
       return { ok: true }
     })().then(sendResponse, (err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }))
     return true
@@ -197,7 +196,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
       else await startActiveTabSelectionWithLastMode()
     }, true)
   }
-  // OCR_STATUS / OCR_RESULT from the offscreen doc are addressed to the side panel
+  // OCR_STATUS / OCR_RESULT from the OCR host are addressed to the side panel
   // via broadcast — no relay needed here.
   return false
 })
@@ -289,7 +288,7 @@ async function originOf(tabId: number): Promise<string> {
 
 /** Re-run OCR on a crop we already captured, in a new mode (no screenshot). */
 async function reprocess(imageDataUrl: string, mode: CaptureMode): Promise<void> {
-  await ensureOffscreen()
+  await ensureOcrHost()
   const { lang } = await panelPrefs()
   await chrome.runtime.sendMessage({ type: 'RUN_OCR', imageDataUrl, lang, mode } satisfies RunOcr)
 }
@@ -332,7 +331,7 @@ async function handleCapture(req: CaptureRequest, tabId?: number, documentId?: s
     const fullDataUrl = await captureTab(tab.id!, tab.windowId, documentId)
     const cropDataUrl = await cropRegion(fullDataUrl, req)
 
-    await ensureOffscreen()
+    await ensureOcrHost()
     const runMsg: RunOcr = {
       type: 'RUN_OCR',
       imageDataUrl: cropDataUrl,
@@ -356,7 +355,7 @@ async function handleViewport(msg: CaptureViewport): Promise<void> {
     checkOrigin(active, msg.origin)
     post({ type: 'OCR_STATUS', stage: 'capturing' })
     const dataUrl = await captureTab(active.id!, active.windowId)
-    await ensureOffscreen()
+    await ensureOcrHost()
     const runMsg: RunOcr = {
       type: 'RUN_OCR',
       imageDataUrl: dataUrl,
@@ -395,7 +394,7 @@ async function handleFullPage(msg: CaptureFullPage): Promise<void> {
       post({ type: 'OCR_STATUS', stage: 'error', message: 'Nothing to capture on this page.' })
       return
     }
-    await ensureOffscreen()
+    await ensureOcrHost()
     const runMsg: RunOcrTiles = {
       type: 'RUN_OCR_TILES',
       imageDataUrls: tiles,
@@ -458,7 +457,7 @@ async function handleConvertPageMd(msg: ConvertPageMd): Promise<void> {
       return
     }
     // The panel OCRs readable images for hybrid captions — it needs the engine alive.
-    if (page.images?.length) await ensureOffscreen()
+    if (page.images?.length) await ensureOcrHost()
     post({
       type: 'PAGE_HTML',
       html: page.html,
@@ -500,34 +499,5 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     fr.onload = () => resolve(fr.result as string)
     fr.onerror = () => reject(fr.error)
     fr.readAsDataURL(blob)
-  })
-}
-
-let offscreenCreating: Promise<void> | undefined
-
-/** Creation is shared by capture, clipboard, and panel-owned PDF requests. */
-async function ensureOffscreen(): Promise<void> {
-  if (offscreenCreating) return offscreenCreating
-  offscreenCreating = createOffscreen()
-  try {
-    await offscreenCreating
-  } finally {
-    offscreenCreating = undefined
-  }
-}
-
-/** Only one offscreen document may exist per extension — check before creating. */
-async function createOffscreen(): Promise<void> {
-  const url = chrome.runtime.getURL(OFFSCREEN_PATH)
-  const existing = (await chrome.runtime.getContexts({
-    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-    documentUrls: [url],
-  })) as chrome.runtime.ExtensionContext[]
-  if (existing.length > 0) return
-
-  await chrome.offscreen.createDocument({
-    url: OFFSCREEN_PATH,
-    reasons: [chrome.offscreen.Reason.WORKERS, chrome.offscreen.Reason.CLIPBOARD],
-    justification: 'Run local OCR and copy requested text to the clipboard without requiring panel focus.',
   })
 }

@@ -1,6 +1,6 @@
 # OCR Buddy
 
-**Faithful, fully-local OCR for Chrome.** Grab text from anything on screen — a
+**Faithful, fully-local OCR for Chrome and Firefox.** Grab text from anything on screen — a
 region, the viewport, or a whole scrolling page — code in a paused video, a
 paragraph in a PDF, a formula, a table. Or turn an entire page into clean
 Markdown for an LLM. No server. No image ever leaves your machine. No
@@ -85,7 +85,14 @@ A few choices worth calling out, because each solved a concrete problem:
   pinned open-source repo the bundled models come from), caches it locally, and
   never touches the network for it again.
 
-Built with Vite + CRXJS. Requires **Chrome 124+** (WebGPU in workers).
+Built with Vite + CRXJS. Chrome requires **124+** (WebGPU in workers). Firefox uses
+its native sidebar and is built separately; see [Firefox build and compatibility](docs/firefox.md).
+
+## Firefox
+
+Build a separate Firefox extension with `npm run build:firefox`. For temporary
+installation, permissions, API differences, and known limitations, see
+[Firefox build and compatibility](docs/firefox.md).
 
 ---
 

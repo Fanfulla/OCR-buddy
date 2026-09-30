@@ -10,6 +10,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { htmlToMarkdown } from './html-to-markdown'
 import { markRated, openReviewPage, recordSuccessAndMaybeNudge, renderStars } from './review'
+import { openShortcutSettings, shortcutBrowserName } from '../shared/browser-compat'
 import {
   LOW_CONFIDENCE,
   PREFS_KEY,
@@ -137,7 +138,7 @@ chrome.permissions.onRemoved.addListener((p) => {
   }
 })
 $('shortcuts-btn').addEventListener('click', () => {
-  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })
+  void openShortcutSettings()
 })
 $('updates-btn').addEventListener('click', () => {
   void chrome.tabs.create({ url: chrome.runtime.getURL('updates.html') })
@@ -150,7 +151,7 @@ void chrome.commands.getAll().then((commands) => {
     const shortcut = commands.find((c) => c.name === name)?.shortcut
     if (shortcut) $(id).title = `${$(id).textContent} (${shortcut})`
   }
-}).catch(() => { $('shortcut-list').textContent = 'Configure shortcuts in Chrome.' })
+}).catch(() => { $('shortcut-list').textContent = `Configure shortcuts in ${shortcutBrowserName}.` })
 
 /** Reflect the selected pack in the UI; the download note only applies to
  *  non-bundled packs. */

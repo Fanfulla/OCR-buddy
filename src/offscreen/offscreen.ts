@@ -159,6 +159,11 @@ async function runTiles(req: RunOcrTiles): Promise<void> {
 }
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, respond) => {
+  if (msg.type === 'OCR_HOST_PING') {
+    if (sender.id !== chrome.runtime.id || sender.tab) return false
+    respond({ ok: true })
+    return false
+  }
   if (msg.type === 'OFFSCREEN_COPY_TEXT') {
     if (sender.id !== chrome.runtime.id || sender.tab || typeof msg.text !== 'string' || msg.text.length > 2_000_000) return false
     const field = document.createElement('textarea')
